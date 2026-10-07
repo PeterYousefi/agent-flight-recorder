@@ -68,7 +68,7 @@ The `ExecutionEvent` for the replay includes:
 }
 ```
 
-Both the original and new execution have `execution.replayed` events pointing at each other. The event on the original records that it was replayed. The event on the new execution records its origin.
+Only the new execution receives the replay event and audit record. The original snapshot, events, and audit history remain unchanged. This clarification follows the v1 immutable-history requirement.
 
 ## API Contract
 
@@ -105,5 +105,5 @@ Storing complete provider responses would allow "exact replay" from stored outpu
 
 - The UI must clearly label replayed executions and link them to their origin.
 - The replay endpoint must validate that the original execution is in a terminal state (SUCCEEDED, FAILED, CANCELLED, BUDGET_EXCEEDED, DEAD_LETTERED) before allowing replay. Replaying a RUNNING execution is rejected.
-- Simulation replay must never use a real provider. The worker must check the `replay_mode` attribute on the message and override the provider selection.
+- Simulation replay must never use a real provider. The replay service persists `mock` as the simulation execution provider before scheduling it.
 - Costs incurred by input replay are real (if using a real provider). This must be visible in the UI and documented.

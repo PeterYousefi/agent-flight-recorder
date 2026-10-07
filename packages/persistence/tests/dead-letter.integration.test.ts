@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it } from 'vitest'
 import {
   createMessageEnvelope,
   ExecutionStatus,
+  ReplayMode,
   ProviderFailureCategory,
   type ExecutionProvider,
   type ProviderExecutionResult,
@@ -14,6 +15,7 @@ import {
   ExecutionProcessor,
   ProviderRegistry,
   DeadLetterService,
+  ReplayService,
 } from '@afr/application'
 import { PostgresExecutionStore } from '../src/index.js'
 const prisma = new PrismaClient({
@@ -46,7 +48,7 @@ const provider: ExecutionProvider = {
   normalizeResult: (raw) => raw as unknown as ProviderExecutionResult,
   healthCheck: () => Promise.resolve({ status: 'healthy', checkedAt: new Date().toISOString() }),
 }
-const registry = new ProviderRegistry([provider])
+const registry = new ProviderRegistry([provider, { ...provider, name: 'mock' }])
 const orchestrator = new ExecutionOrchestrator(store, registry)
 const processor = new ExecutionProcessor(store, registry, new InMemoryArtifactStore())
 const service = new DeadLetterService(store, orchestrator)
@@ -81,6 +83,7 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       ).map((r) => r.id)
       const where = { executionId: { in: ids } }
       await prisma.deadLetterRequeue.deleteMany({ where: { newExecutionId: { in: ids } } })
+      await prisma.replayRelationship.deleteMany({ where: { replayExecutionId: { in: ids } } })
       await prisma.deadLetterRecord.deleteMany({ where })
       await prisma.messageOutbox.deleteMany({ where })
       await prisma.auditRecord.deleteMany({ where })
@@ -126,6 +129,29 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       expect(await store.getDeadLetter(id)).toEqual(record)
       expect((await store.listAuditRecords(requeued.id))[0]?.action).toBe('dead_letter.requeued')
       await expect(orchestrator.cancel(record.executionId)).rejects.toThrow()
+    })
+    it('replays terminal input into a new execution and preserves all original records', async () => {
+      const record = (await store.getDeadLetter(await deadLetter()))!
+      const before = await store.getExecution(record.executionId)
+      const history = await store.listEvents(record.executionId)
+      const audit = await store.listAuditRecords(record.executionId)
+      const replay = new ReplayService(store, registry, orchestrator)
+      const input = await replay.replay(record.executionId, { mode: ReplayMode.INPUT })
+      const simulation = await replay.replay(record.executionId, { mode: ReplayMode.SIMULATION })
+      expect(input.request.provider).toBe(provider.name)
+      expect(simulation.request.provider).toBe('mock')
+      expect(simulation.request.input.scenario).toBe('success')
+      expect(input.request.idempotencyKey).toBeUndefined()
+      expect(input.status).toBe(ExecutionStatus.QUEUED)
+      expect((await store.getReplayRelationship(input.id))?.originalExecutionId).toBe(
+        record.executionId,
+      )
+      expect(await store.getExecution(record.executionId)).toEqual(before)
+      expect(await store.listEvents(record.executionId)).toEqual(history)
+      expect(await store.listAuditRecords(record.executionId)).toEqual(audit)
+      await expect(replay.replay(input.id, { mode: ReplayMode.INPUT })).rejects.toMatchObject({
+        code: 'CONFLICT',
+      })
     })
     it('rejects nonexistent dead letters', async () => {
       await expect(service.requeue(randomUUID())).rejects.toMatchObject({ code: 'NOT_FOUND' })
