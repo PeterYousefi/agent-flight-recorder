@@ -124,7 +124,7 @@ export async function request<T>(
   try {
     response = await fetch(`${origin}/api/v1${path}`, {
       method: options.method ?? 'GET',
-      headers: { 'content-type': 'application/json' },
+      ...(options.body === undefined ? {} : { headers: { 'content-type': 'application/json' } }),
       ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
       signal:
         options.signal === undefined

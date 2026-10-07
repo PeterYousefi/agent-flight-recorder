@@ -1,3 +1,4 @@
+import { Toaster } from 'sonner'
 import type { JSX } from 'react'
 import { createRootRouteWithContext, Outlet, Link } from '@tanstack/react-router'
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
@@ -23,6 +24,7 @@ function Root(): JSX.Element {
     <QueryClientProvider client={queryClient}>
       <AppShell>
         <Outlet />
+        <Toaster theme="dark" richColors closeButton />
       </AppShell>
     </QueryClientProvider>
   )

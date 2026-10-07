@@ -1,4 +1,4 @@
-import type { ExecutionDto, CostDto } from './api'
+import type { ExecutionDto, CostDto, EventDto } from './api'
 export type ExecutionStatus =
   | 'pending'
   | 'queued'
@@ -102,4 +102,61 @@ export function fmtRelative(iso: string): string {
 }
 export function fmtTime(iso: string): string {
   return new Date(iso).toISOString().replace('T', ' ').slice(0, 19) + 'Z'
+}
+
+export function timeline(events: EventDto[], start: string): TimelineEvent[] {
+  let attempt = 0
+  const types: Record<string, [TimelineEventType, string, EventStatus]> = {
+    'execution.created': ['created', 'Execution created', 'info'],
+    'execution.queued': ['queued', 'Queued for worker', 'info'],
+    'execution.started': ['started', 'Attempt started', 'running'],
+    'execution.waiting': ['waiting', 'Waiting on dependency', 'info'],
+    'execution.retry_scheduled': ['retry_scheduled', 'Retry scheduled', 'warning'],
+    'execution.succeeded': ['completed', 'Execution succeeded', 'success'],
+    'execution.failed': ['failed', 'Attempt failed', 'failure'],
+    'execution.cancelled': ['cancelled', 'Execution cancelled', 'warning'],
+    'execution.budget_exceeded': ['failed', 'Budget exceeded', 'failure'],
+    'execution.dead_lettered': ['dead_lettered', 'Dead letter recorded', 'failure'],
+    'execution.replayed': ['replayed', 'Replay linked to original', 'info'],
+    'tool.requested': ['model_request', 'Provider call requested', 'info'],
+    'tool.started': ['tool_call', 'Provider call started', 'running'],
+    'tool.succeeded': ['completed', 'Provider call succeeded', 'success'],
+    'tool.failed': ['failed', 'Provider call failed', 'failure'],
+    'artifact.persisted': ['artifact', 'Private artifact persisted', 'success'],
+    'budget.warning': ['budget_warning', 'Budget warning', 'warning'],
+  }
+  return [...events]
+    .sort((a, b) => a.sequence - b.sequence)
+    .map((event) => {
+      const payload = event.payload
+      if (event.event_type === 'execution.started' && typeof payload.attemptNumber === 'number')
+        attempt = payload.attemptNumber
+      const [type, label, status] = types[event.event_type] ?? ['waiting', event.event_type, 'info']
+      const error = payload.error
+      const reason =
+        typeof error === 'object' && error !== null && 'code' in error
+          ? String(error.code)
+          : typeof payload.reason === 'string'
+            ? payload.reason
+            : typeof payload.budgetType === 'string'
+              ? `${payload.budgetType} · observed ${String(payload.observed)} / limit ${String(payload.limit ?? payload.threshold)}`
+              : event.event_type
+      return {
+        id: event.event_id,
+        type,
+        label,
+        status:
+          status === 'running' && event.sequence !== events.at(-1)?.sequence ? 'info' : status,
+        attempt,
+        offsetMs: Math.max(0, Date.parse(event.timestamp) - Date.parse(start)),
+        ...(typeof payload.durationMs === 'number' ? { durationMs: payload.durationMs } : {}),
+        meta: `#${event.sequence} · ${reason}${typeof payload.nextRetryAt === 'string' ? ` · next ${fmtTime(payload.nextRetryAt)}` : ''}`,
+        details: {
+          ...payload,
+          timestamp: event.timestamp,
+          sequence: event.sequence,
+          correlation: event.correlation ?? {},
+        },
+      }
+    })
 }

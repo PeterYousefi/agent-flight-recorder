@@ -44,7 +44,7 @@ const railColor: Record<string, string> = {
 }
 
 function EventRow({ event, startIso }: { event: TimelineEvent; startIso: string }): JSX.Element {
-  const [open, setOpen] = useState(event.status === 'failure')
+  const [open, setOpen] = useState(false)
   const Icon = iconFor[event.type]
   const ts = new Date(new Date(startIso).getTime() + event.offsetMs).toISOString().slice(11, 23)
 
@@ -69,8 +69,9 @@ function EventRow({ event, startIso }: { event: TimelineEvent; startIso: string 
       </div>
 
       {/* content */}
-      <div className="min-w-0 flex-1 pb-5">
+      <div className="min-w-0 flex-1 pb-3">
         <button
+          aria-expanded={open}
           onClick={() => event.details && setOpen(!open)}
           className={cn(
             'flex w-full items-center gap-2 rounded-sm text-left',
@@ -86,7 +87,7 @@ function EventRow({ event, startIso }: { event: TimelineEvent; startIso: string 
             {event.label}
           </span>
           <span className="rounded-sm border border-border bg-muted px-1 py-px font-mono text-[9px] tracking-wide text-muted-foreground uppercase">
-            attempt {event.attempt}
+            {event.attempt === 0 ? 'setup' : `attempt ${event.attempt}`}
           </span>
           {event.durationMs !== undefined && (
             <span className="font-mono text-[11px] text-info">{fmtDuration(event.durationMs)}</span>
@@ -140,12 +141,18 @@ export function FlightRecorder({
           Flight Recorder
         </h3>
         <span className="font-mono text-[11px] text-muted-foreground">
-          {events.length} events · {attempts.size} attempt{attempts.size > 1 ? 's' : ''}
+          {events.length} events · {[...attempts.keys()].filter((n) => n > 0).length} attempt
+          {attempts.size > 1 ? 's' : ''}
         </span>
       </div>
       <div>
         {events.map((e, i) => (
           <div key={e.id} className={cn(i === events.length - 1 && '[&_.flex-1]:pb-0')}>
+            {(i === 0 || events[i - 1]?.attempt !== e.attempt) && (
+              <div className="mb-3 border-b border-border pb-2 font-mono text-[11px] text-muted-foreground">
+                {e.attempt === 0 ? 'Preparation' : `Attempt ${e.attempt}`}
+              </div>
+            )}
             <EventRow event={e} startIso={startIso} />
           </div>
         ))}

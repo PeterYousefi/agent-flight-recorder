@@ -4,6 +4,7 @@ import { ChevronRight, ChevronDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 function JsonValue({ value, depth }: { value: unknown; depth: number }): JSX.Element {
+  if (value === undefined) return <span className="text-muted-foreground italic">undefined</span>
   if (value === null) return <span className="text-muted-foreground italic">null</span>
   if (typeof value === 'boolean')
     return <span className="text-warning">{value ? 'true' : 'false'}</span>
@@ -13,7 +14,7 @@ function JsonValue({ value, depth }: { value: unknown; depth: number }): JSX.Ele
 }
 
 function JsonNode({ value, depth }: { value: unknown; depth: number }): JSX.Element {
-  const [open, setOpen] = useState(depth < 2)
+  const [open, setOpen] = useState(depth < 1)
   const isArray = Array.isArray(value)
   const entries = isArray
     ? (value as unknown[]).map((v, i) => [String(i), v] as const)
@@ -26,6 +27,8 @@ function JsonNode({ value, depth }: { value: unknown; depth: number }): JSX.Elem
   return (
     <span>
       <button
+        aria-label={open ? 'Collapse JSON value' : 'Expand JSON value'}
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
         className="inline-flex items-center gap-0.5 rounded-sm text-muted-foreground hover:text-foreground"
       >
@@ -57,11 +60,11 @@ export function JSONViewer({
   return (
     <div
       className={cn(
-        'overflow-auto rounded-md border border-border bg-background/60 p-3 font-mono text-xs',
+        'max-h-96 overflow-auto rounded-md border border-border bg-background/60 p-3 font-mono text-xs',
         className,
       )}
     >
-      <JsonNode value={data} depth={0} />
+      <JsonValue value={data} depth={0} />
     </div>
   )
 }

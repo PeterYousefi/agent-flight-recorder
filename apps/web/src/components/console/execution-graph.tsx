@@ -1,4 +1,5 @@
-import type { JSX } from 'react'
+import { useState, type JSX } from 'react'
+import { JSONViewer } from './json-viewer'
 import { cn } from '@/lib/utils'
 import { fmtDuration, type TimelineEvent } from '@/lib/data'
 
@@ -39,6 +40,7 @@ const dotByStatus: Record<string, string> = {
 }
 
 export function ExecutionGraph({ events }: { events: TimelineEvent[] }): JSX.Element {
+  const [selected, setSelected] = useState<string | null>(null)
   const nodes: GraphNode[] = []
   const edges: GraphEdge[] = []
 
@@ -84,7 +86,7 @@ export function ExecutionGraph({ events }: { events: TimelineEvent[] }): JSX.Ele
   const height = Math.max(...nodes.map((n) => n.row)) * ROW_H + 80
 
   const nodeByKey = new Map(nodes.map((n) => [n.key, n]))
-  const cx = (n: GraphNode): number => 20 + n.col * COL_W + NODE_W / 2
+  const cx = (n: GraphNode): number => 20 + n.col * COL_W + COL_W / 2
   const cy = (n: GraphNode): number => 20 + n.row * ROW_H + NODE_H / 2
 
   return (
@@ -120,10 +122,12 @@ export function ExecutionGraph({ events }: { events: TimelineEvent[] }): JSX.Ele
           })}
         </svg>
         {nodes.map((n) => (
-          <div
+          <button
+            aria-label={`Inspect ${n.label}`}
+            onClick={() => setSelected(n.key)}
             key={n.key}
             className={cn(
-              'absolute flex flex-col justify-center rounded-sm border bg-card px-2.5',
+              'absolute flex flex-col justify-center rounded-sm border bg-card px-2.5 text-left focus-visible:ring-2 focus-visible:ring-primary',
               borderByStatus[n.status],
             )}
             style={{
@@ -144,9 +148,15 @@ export function ExecutionGraph({ events }: { events: TimelineEvent[] }): JSX.Ele
                 {n.sub}
               </span>
             )}
-          </div>
+          </button>
         ))}
       </div>
+      {selected !== null && (
+        <JSONViewer
+          data={events.find((e) => e.id === selected)?.details ?? { label: 'Execution root' }}
+          className="mt-4"
+        />
+      )}
     </div>
   )
 }
