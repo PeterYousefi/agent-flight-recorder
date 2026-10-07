@@ -1,0 +1,166 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Execution {
+  id                  String    @id @default(uuid()) @db.Uuid
+  agentId             String    @map("agent_id")
+  provider            String
+  operation           String
+  status              String
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  startedAt           DateTime? @map("started_at") @db.Timestamptz(6)
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
+  currentAttempt      Int?      @map("current_attempt")
+  idempotencyKey      String?   @unique @map("idempotency_key")
+  originalExecutionId String?   @map("original_execution_id") @db.Uuid
+  budgetPolicy        Json?     @map("budget_policy")
+  metadata            Json?
+
+  originalExecution   Execution?           @relation("ExecutionReplay", fields: [originalExecutionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  replayExecutions    Execution[]          @relation("ExecutionReplay")
+  attempts            ExecutionAttempt[]
+  events              ExecutionEvent[]
+  costs               CostRecord[]
+  artifacts           Artifact[]
+  originalReplays     ReplayRelationship[] @relation("ReplayOriginal")
+  replayRelationships ReplayRelationship[] @relation("ReplayExecution")
+  deadLetter          DeadLetterRecord?
+  requeuedDeadLetters DeadLetterRecord[]   @relation("DeadLetterRequeue")
+  audits              AuditRecord[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@index([provider])
+  @@index([status, createdAt])
+  @@index([originalExecutionId])
+  @@map("executions")
+}
+
+model ExecutionAttempt {
+  id            String    @id @default(uuid()) @db.Uuid
+  executionId   String    @map("execution_id") @db.Uuid
+  attemptNumber Int       @map("attempt_number")
+  status        String
+  startedAt     DateTime  @map("started_at") @db.Timestamptz(6)
+  completedAt   DateTime? @map("completed_at") @db.Timestamptz(6)
+  errorCode     String?   @map("error_code")
+  errorMessage  String?   @map("error_message")
+  retryable     Boolean?
+
+  execution Execution    @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  costs     CostRecord[]
+
+  @@unique([executionId, attemptNumber])
+  @@index([executionId])
+  @@map("execution_attempts")
+}
+
+model ExecutionEvent {
+  id               String   @id @default(uuid()) @db.Uuid
+  executionId      String   @map("execution_id") @db.Uuid
+  eventType        String   @map("event_type")
+  sequence         Int
+  schemaVersion    Int      @map("schema_version")
+  timestamp        DateTime @db.Timestamptz(6)
+  correlationId    String?  @map("correlation_id")
+  causationEventId String?  @map("causation_event_id")
+  traceId          String?  @map("trace_id")
+  spanId           String?  @map("span_id")
+  payload          Json
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([executionId, sequence])
+  @@index([executionId])
+  @@index([eventType])
+  @@index([timestamp])
+  @@map("execution_events")
+}
+
+model CostRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  executionId    String   @map("execution_id") @db.Uuid
+  attemptId      String?  @map("attempt_id") @db.Uuid
+  category       String
+  source         String?
+  kind           String
+  amountMicroUsd BigInt   @map("amount_micro_usd")
+  timestamp      DateTime @default(now()) @db.Timestamptz(6)
+  metadata       Json?
+
+  execution Execution         @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  attempt   ExecutionAttempt? @relation(fields: [attemptId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([executionId])
+  @@index([timestamp])
+  @@map("cost_records")
+}
+
+model Artifact {
+  id          String   @id @default(uuid()) @db.Uuid
+  executionId String   @map("execution_id") @db.Uuid
+  kind        String
+  contentType String   @map("content_type")
+  sizeBytes   BigInt   @map("size_bytes")
+  checksum    String?
+  storageKey  String   @map("storage_key")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([executionId])
+  @@map("artifacts")
+}
+
+model ReplayRelationship {
+  id                  String   @id @default(uuid()) @db.Uuid
+  originalExecutionId String   @map("original_execution_id") @db.Uuid
+  replayExecutionId   String   @unique @map("replay_execution_id") @db.Uuid
+  replayMode          String   @map("replay_mode")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  originalExecution Execution @relation("ReplayOriginal", fields: [originalExecutionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  replayExecution   Execution @relation("ReplayExecution", fields: [replayExecutionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([originalExecutionId])
+  @@map("replay_relationships")
+}
+
+model DeadLetterRecord {
+  id                    String   @id @default(uuid()) @db.Uuid
+  executionId           String   @unique @map("execution_id") @db.Uuid
+  finalAttempt          Int      @map("final_attempt")
+  reason                String
+  error                 Json?
+  deadLetteredAt        DateTime @default(now()) @map("dead_lettered_at") @db.Timestamptz(6)
+  requeuedAsExecutionId String?  @unique @map("requeued_as_execution_id") @db.Uuid
+
+  execution           Execution  @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  requeuedAsExecution Execution? @relation("DeadLetterRequeue", fields: [requeuedAsExecutionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([deadLetteredAt])
+  @@index([executionId])
+  @@map("dead_letters")
+}
+
+model AuditRecord {
+  id          String   @id @default(uuid()) @db.Uuid
+  executionId String?  @map("execution_id") @db.Uuid
+  action      String
+  actorId     String?  @map("actor_id")
+  timestamp   DateTime @default(now()) @db.Timestamptz(6)
+  metadata    Json?
+
+  execution Execution? @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([executionId])
+  @@index([timestamp])
+  @@map("audit_records")
+}

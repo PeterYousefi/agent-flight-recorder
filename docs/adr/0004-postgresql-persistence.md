@@ -93,3 +93,24 @@ In production, PostgreSQL maps to **Azure Database for PostgreSQL Flexible Serve
 - Prisma migrations must be run before the first application start: `pnpm prisma migrate deploy`.
 - The `DATABASE_URL` environment variable format must be set correctly for both local and Azure deployments.
 - Schema changes require a new Prisma migration file — `prisma db push` is prohibited in production paths.
+
+## Initial Schema Implementation Notes
+
+The T-10 Prisma schema persists the execution snapshot separately from immutable
+execution events, attempts, costs, artifacts, replay relationships, dead-letter
+records, and audit records. Status and event type columns remain text values so
+the domain can evolve without coupling every new lifecycle value to a database
+enum migration.
+
+- Event order is protected by `UNIQUE (execution_id, sequence)`; assigning the
+  next sequence transactionally remains a repository concern.
+- Request idempotency is protected by a unique nullable `idempotency_key`.
+- Monetary values are stored as non-negative `BIGINT amount_micro_usd` values,
+  matching the domain evaluator's integer micro-dollar comparisons.
+- Replay relationships use a unique replay execution ID and a database check
+  preventing an execution from replaying itself.
+- Historical foreign keys use restrictive deletion. A dead-lettered execution
+  remains historical and requeue relationships point to a new execution.
+- Database checks enforce structural facts such as positive sequences/counts and
+  non-negative money/byte sizes. The domain layer remains authoritative for the
+  legal execution state machine and event semantics.
