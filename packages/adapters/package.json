@@ -16,10 +16,12 @@
     "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "lint": "eslint src"
+    "lint": "eslint src",
+    "test:integration": "vitest run src/*.integration.test.ts"
   },
   "dependencies": {
-    "@afr/domain": "workspace:*"
+    "@afr/domain": "workspace:*",
+    "@azure/service-bus": "7.10.0"
   },
   "devDependencies": {
     "@types/node": "22.15.29",
