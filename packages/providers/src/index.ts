@@ -1,2 +1,7 @@
-// Entry point — populated when providers are implemented (T-19, T-20)
-export {}
+export {
+  MockProvider,
+  mockScenarios,
+  type MockScenario,
+  type MockProviderOptions,
+} from './mock-provider.js'
+export { normalizeProviderResult } from './normalize.js'
