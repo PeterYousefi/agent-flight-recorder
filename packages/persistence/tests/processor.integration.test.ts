@@ -70,14 +70,14 @@ async function create(maxCostUsd = 1): Promise<string> {
     })
   ).execution.id
 }
-function message(id: string): ReturnType<typeof createMessageEnvelope> {
+function message(id: string, attemptNumber = 1): ReturnType<typeof createMessageEnvelope> {
   return createMessageEnvelope({
     messageId: randomUUID(),
     messageType: 'execution.process',
     executionId: id,
     schemaVersion: 1,
     createdAt: now.toISOString(),
-    payload: {},
+    payload: { attemptNumber },
   })
 }
 describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
@@ -226,6 +226,12 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       expect((await processor.handle(message(id))).kind).toBe('RETRY')
       now = new Date(now.getTime() + 1001)
       await processor.handle(message(id))
+      expect((await store.getExecution(id))?.status).toBe(ExecutionStatus.RETRY_SCHEDULED)
+      now = new Date(now.getTime() + 31000)
+      const recoveryBus = new InMemoryMessageBus()
+      await recoveryBus.subscribe((m) => processor.handle(m))
+      await new OutboxDispatcher(store, recoveryBus, runtime).dispatch()
+      await recoveryBus.drain()
       const attempts = await store.listAttempts(id)
       expect(attempts.map((a) => a.status)).toEqual(['FAILED', 'SUCCEEDED'])
       expect(attempts[0]?.errorCode).toBe('WORKER_LEASE_EXPIRED')

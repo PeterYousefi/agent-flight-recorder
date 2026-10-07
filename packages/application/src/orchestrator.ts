@@ -65,7 +65,7 @@ export class ExecutionOrchestrator {
           executionId: id,
           schemaVersion: 1,
           createdAt: this.runtime.now().toISOString(),
-          payload: {},
+          payload: { attemptNumber: 1 },
         }),
       })
     })

@@ -13,12 +13,15 @@ import { append, type Runtime } from './runtime.js'
 import { executionUsage } from './budgets.js'
 import { budgetExceeded } from './budget-effects.js'
 import type { Claim } from './claim.js'
+import { recordFailure } from './failure-recorder.js'
+import type { RetryPolicy } from './retry.js'
 export async function finishExecution(
   store: ExecutionStore,
   artifacts: ArtifactStore,
   claim: Claim,
   result: ProviderExecutionResult,
   runtime: Runtime,
+  retryPolicy: RetryPolicy,
 ): Promise<void> {
   const { execution, attempt } = claim
   let artifact: Awaited<ReturnType<ArtifactStore['get']>> | undefined
@@ -64,34 +67,7 @@ export async function finishExecution(
     if (current?.status !== ExecutionStatus.RUNNING) return
     const durationMs = Math.max(0, completedAt.getTime() - attempt.startedAt.getTime())
     if (result.kind === 'FAILED') {
-      await append(
-        tx,
-        execution.id,
-        ExecutionEventType.TOOL_FAILED,
-        { toolInvocationId: attempt.id, durationMs, error: result.error },
-        runtime,
-      )
-      await tx.finishAttempt({
-        ...attempt,
-        status: AttemptStatus.FAILED,
-        completedAt,
-        errorCode: result.error.code,
-        errorMessage: result.error.message,
-        retryable: result.error.retryable,
-      })
-      await append(
-        tx,
-        execution.id,
-        ExecutionEventType.EXECUTION_FAILED,
-        { attemptNumber: attempt.attemptNumber, error: result.error },
-        runtime,
-      )
-      await tx.updateExecutionSnapshot(
-        execution.id,
-        ExecutionStatus.RUNNING,
-        ExecutionStatus.FAILED,
-        completedAt,
-      )
+      await recordFailure(tx, claim, result.error, runtime, retryPolicy)
       return
     }
     if (artifact !== undefined) {

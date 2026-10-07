@@ -55,6 +55,7 @@ export interface ProviderError {
   readonly retryable: boolean
   readonly category: ProviderFailureCategory
   readonly providerCode?: string
+  readonly retryAfterMs?: number
 }
 
 export interface ProviderSuccessResult {
