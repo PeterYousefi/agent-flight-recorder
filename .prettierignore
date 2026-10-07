@@ -7,8 +7,6 @@ coverage/
 pnpm-lock.yaml
 # Prisma generated client
 packages/domain/src/generated/
-# Grafana dashboard JSON (auto-generated, not hand-edited)
-infra/local/grafana/dashboards/
 
 # Preserve the imported visual reference until its migration.
 apps/lovable-ui/

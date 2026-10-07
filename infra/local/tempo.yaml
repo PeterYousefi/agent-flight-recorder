@@ -18,14 +18,6 @@ compactor:
   compaction:
     block_retention: 1h
 
-metrics_generator:
-  registry:
-    external_labels:
-      source: tempo
-      cluster: local
-  storage:
-    path: /var/tempo/generator/wal
-
 storage:
   trace:
     backend: local
@@ -33,10 +25,3 @@ storage:
       path: /var/tempo/blocks
     wal:
       path: /var/tempo/wal
-
-overrides:
-  defaults:
-    metrics_generator:
-      processors: [service-graphs, span-metrics]
-      storage:
-        remote_write_flush_deadline: 1m

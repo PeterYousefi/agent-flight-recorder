@@ -19,10 +19,6 @@ datasources:
     access: proxy
     isDefault: false
     jsonData:
-      tracesToLogsV2:
-        datasourceUid: ''
-      serviceMap:
-        datasourceUid: 'prometheus'
       nodeGraph:
         enabled: true
       traceQuery:

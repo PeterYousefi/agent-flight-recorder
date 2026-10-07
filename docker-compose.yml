@@ -7,9 +7,9 @@
 # APPLE SILICON NOTE:
 #   The Azure Service Bus emulator and its SQL Server dependency are amd64-only images.
 #   Docker Desktop on Apple Silicon (M1/M2/M3/M4) runs them via Rosetta emulation.
-#   This adds ~200-400ms startup overhead but is functionally correct.
-#   No special Docker Desktop settings are required beyond the default Rosetta option
-#   ("Use Rosetta for x86/amd64 emulation on Apple Silicon") which is enabled by default.
+#   Startup and throughput depend on the machine and emulation settings.
+#   Enable the Docker Desktop Rosetta option
+#   ("Use Rosetta for x86/amd64 emulation on Apple Silicon") if needed.
 #
 # AZURE COST: $0 — all services are local emulators. No Azure resources are provisioned.
 
@@ -32,7 +32,7 @@ services:
       POSTGRES_USER: afr_user
       POSTGRES_PASSWORD: afr_password
     ports:
-      - '5434:5432' # 5432 may conflict with a local PostgreSQL or other container
+      - '127.0.0.1:5434:5432' # 5432 may conflict with a local PostgreSQL or other container
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -57,7 +57,7 @@ services:
       MSSQL_SA_PASSWORD: 'ServiceBus!2024'
       MSSQL_PID: 'Developer'
     ports:
-      - '1433:1433'
+      - '127.0.0.1:1433:1433'
     volumes:
       - sqledge_data:/var/opt/mssql
     healthcheck:
@@ -97,7 +97,7 @@ services:
             },
             "Namespaces": [
               {
-                    "Name": "sbemulatorns",
+                "Name": "sbemulatorns",
                 "Queues": [
                   {
                     "Name": "executions",
@@ -138,8 +138,8 @@ services:
       SQL_SERVER: sqledge
       MSSQL_SA_PASSWORD: 'ServiceBus!2024'
     ports:
-      - '5672:5672' # AMQP
-      - '5300:5300' # HTTP management / health
+      - '127.0.0.1:5672:5672' # AMQP
+      - '127.0.0.1:5300:5300' # HTTP management / health
     volumes:
       - servicebus_config:/ServiceBus_Emulator/ConfigFiles:ro
     depends_on:
@@ -190,9 +190,9 @@ services:
       --debug /data/debug.log
       --loose
     ports:
-      - '10000:10000' # Blob
-      - '10001:10001' # Queue
-      - '10002:10002' # Table
+      - '127.0.0.1:10000:10000' # Blob
+      - '127.0.0.1:10001:10001' # Queue
+      - '127.0.0.1:10002:10002' # Table
     volumes:
       - azurite_data:/data
     healthcheck:
@@ -215,6 +215,7 @@ services:
   # Profile: observability
   # ──────────────────────────────────────────────
   otel-config-init:
+    profiles: [observability]
     image: alpine:3.21
     container_name: afr-otel-config-init
     volumes:
@@ -231,6 +232,7 @@ services:
                 endpoint: 0.0.0.0:4317
               http:
                 endpoint: 0.0.0.0:4318
+
         processors:
           batch:
             timeout: 5s
@@ -239,18 +241,25 @@ services:
             check_interval: 1s
             limit_mib: 256
             spike_limit_mib: 64
+
         exporters:
+          # Traces → Grafana Tempo
           otlp/tempo:
             endpoint: tempo:4317
             tls:
               insecure: true
+
+          # Metrics → Prometheus (pull model via /metrics endpoint)
           prometheus:
             endpoint: 0.0.0.0:8889
             namespace: afr
             const_labels:
               deployment_environment: local
+
+          # Debug logging (development only — remove in production)
           debug:
             verbosity: basic
+
         service:
           telemetry:
             logs:
@@ -283,9 +292,9 @@ services:
       otel-config-init:
         condition: service_completed_successfully
     ports:
-      - '4317:4317' # OTLP gRPC
-      - '4318:4318' # OTLP HTTP
-      - '8889:8889' # Prometheus metrics scrape endpoint
+      - '127.0.0.1:4317:4317' # OTLP gRPC
+      - '127.0.0.1:4318:4318' # OTLP HTTP
+      - '127.0.0.1:8889:8889' # Prometheus metrics scrape endpoint
     healthcheck:
       test: ['NONE']
     restart: unless-stopped
@@ -340,13 +349,21 @@ services:
           external_labels:
             cluster: local
             environment: development
+
         scrape_configs:
-          - job_name: "otel-collector"
+          # Scrape OTel Collector's Prometheus exporter for application metrics
+          - job_name: 'otel-collector'
             static_configs:
-              - targets: ["otel-collector:8889"]
-          - job_name: "prometheus"
+              - targets: ['otel-collector:8889']
+            relabel_configs:
+              - source_labels: [__address__]
+                target_label: instance
+                replacement: 'otel-collector'
+
+          # Scrape Prometheus itself
+          - job_name: 'prometheus'
             static_configs:
-              - targets: ["localhost:9090"]
+              - targets: ['localhost:9090']
         PROMCONFIG
         exec /bin/prometheus \
           --config.file=/etc/prometheus/prometheus.yml \
@@ -354,7 +371,7 @@ services:
           --storage.tsdb.retention.time=7d \
           --web.enable-lifecycle
     ports:
-      - '9090:9090'
+      - '127.0.0.1:9090:9090'
     depends_on:
       otel-healthcheck:
         condition: service_healthy
@@ -374,6 +391,7 @@ services:
   # Profile: observability
   # ──────────────────────────────────────────────
   tempo-config-init:
+    profiles: [observability]
     image: alpine:3.21
     container_name: afr-tempo-config-init
     volumes:
@@ -384,20 +402,25 @@ services:
       - |
         cat > /config/tempo.yaml << 'TEMPOCONFIG'
         stream_over_http_enabled: true
+
         server:
           http_listen_port: 3200
           log_level: warn
+
         distributor:
           receivers:
             otlp:
               protocols:
                 grpc:
                   endpoint: 0.0.0.0:4317
+
         ingester:
           max_block_duration: 5m
+
         compactor:
           compaction:
             block_retention: 1h
+
         storage:
           trace:
             backend: local
@@ -421,8 +444,8 @@ services:
       tempo-config-init:
         condition: service_completed_successfully
     ports:
-      - '3200:3200' # Tempo HTTP query
-      - '4319:4317' # OTLP gRPC (offset to avoid clash with collector)
+      - '127.0.0.1:3200:3200' # Tempo HTTP query
+      - '127.0.0.1:4319:4317' # OTLP gRPC (offset to avoid clash with collector)
     healthcheck:
       test: ['NONE']
     restart: unless-stopped
@@ -471,6 +494,7 @@ services:
         mkdir -p /etc/grafana/provisioning/datasources /etc/grafana/provisioning/dashboards
         cat > /etc/grafana/provisioning/datasources/datasources.yaml << 'DSCONFIG'
         apiVersion: 1
+
         datasources:
           - name: Prometheus
             type: prometheus
@@ -479,9 +503,10 @@ services:
             access: proxy
             isDefault: true
             jsonData:
-              timeInterval: "15s"
-              httpMethod: "POST"
+              timeInterval: '15s'
+              httpMethod: 'POST'
             editable: false
+
           - name: Tempo
             type: tempo
             uid: tempo
@@ -489,30 +514,566 @@ services:
             access: proxy
             isDefault: false
             jsonData:
-              serviceMap:
-                datasourceUid: "prometheus"
               nodeGraph:
                 enabled: true
+              traceQuery:
+                timeShiftEnabled: true
+                spanStartTimeShift: '1h'
+                spanEndTimeShift: '-1h'
+              spanBar:
+                type: 'None'
             editable: false
         DSCONFIG
         cat > /etc/grafana/provisioning/dashboards/dashboards.yaml << 'DBCONFIG'
         apiVersion: 1
+
         providers:
-          - name: "Agent Flight Recorder"
+          - name: 'Agent Flight Recorder'
             orgId: 1
-            folder: "AFR"
+            folder: 'AFR'
             type: file
             disableDeletion: false
             updateIntervalSeconds: 30
+            allowUiUpdates: true
             options:
               path: /var/lib/grafana/dashboards
         DBCONFIG
         mkdir -p /var/lib/grafana/dashboards
+        cat > /var/lib/grafana/dashboards/operations.json << 'DASHBOARD'
+        {
+          "uid": "afr-operations",
+          "title": "Agent Flight Recorder \u2014 Local Operations",
+          "schemaVersion": 40,
+          "version": 1,
+          "timezone": "browser",
+          "refresh": "5s",
+          "time": {
+            "from": "now-30m",
+            "to": "now"
+          },
+          "tags": ["afr", "local"],
+          "panels": [
+            {
+              "id": 1,
+              "title": "Execution creation rate",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_executions_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 2,
+              "title": "Terminal outcomes",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 12,
+                "y": 0,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum by (status) (rate(afr_execution_duration_seconds_count[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 3,
+              "title": "P50 wall duration",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.50, sum by (le) (rate(afr_execution_duration_seconds_bucket[$$__rate_interval])))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 4,
+              "title": "P95 wall duration",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 12,
+                "y": 8,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "histogram_quantile(0.95, sum by (le) (rate(afr_execution_duration_seconds_bucket[$$__rate_interval])))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "s"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 5,
+              "title": "Scheduled retries",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_execution_retry_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 6,
+              "title": "Dead letters",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 12,
+                "y": 16,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_dead_letter_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 7,
+              "title": "Provider call failures",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 0,
+                "y": 24,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_provider_error_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 8,
+              "title": "Budget rejections",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 12,
+                "y": 24,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_budget_rejections_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 9,
+              "title": "Estimated cost rate",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 0,
+                "y": 32,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_estimated_execution_cost_USD_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "currencyUSD"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": "Mock costs are synthetic; estimates are not measured charges."
+            },
+            {
+              "id": 10,
+              "title": "Measured cost rate",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 12,
+                "y": 32,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_measured_execution_cost_USD_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "currencyUSD"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": "Mock measured costs are synthetic. Real costs appear only when supplied by the provider."
+            },
+            {
+              "id": 11,
+              "title": "Queue publication rate",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 0,
+                "y": 40,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_queue_published_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 12,
+              "title": "Queue consumption rate",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 12,
+                "y": 40,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_queue_consumed_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": "At-least-once deliveries may exceed unique execution attempts."
+            },
+            {
+              "id": 13,
+              "title": "Transport retries",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 0,
+                "y": 48,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_queue_transport_retries_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 14,
+              "title": "Tool/provider operation calls",
+              "type": "timeseries",
+              "gridPos": {
+                "x": 12,
+                "y": 48,
+                "w": 12,
+                "h": 8
+              },
+              "datasource": {
+                "type": "prometheus",
+                "uid": "prometheus"
+              },
+              "targets": [
+                {
+                  "refId": "A",
+                  "expr": "sum(rate(afr_tool_invocation_total[$$__rate_interval]))",
+                  "legendFormat": "{{status}}"
+                }
+              ],
+              "fieldConfig": {
+                "defaults": {
+                  "unit": "ops"
+                },
+                "overrides": []
+              },
+              "options": {
+                "legend": {
+                  "displayMode": "list",
+                  "placement": "bottom"
+                }
+              },
+              "description": ""
+            },
+            {
+              "id": 15,
+              "title": "Trace and queue notes",
+              "type": "text",
+              "gridPos": {
+                "x": 0,
+                "y": 56,
+                "w": 24,
+                "h": 4
+              },
+              "options": {
+                "mode": "markdown",
+                "content": "Use **Explore \u2192 Tempo** and a trace ID from an execution event to inspect HTTP \u2192 queue \u2192 worker \u2192 provider \u2192 artifact spans.\n\nTransport queue depth is unavailable because the emulator runtime-count response is incompatible with the SDK parser. Publication, consumption and redelivery rates above are measured. Counters reset with application processes. No Azure resources are used."
+              }
+            }
+          ],
+          "links": [
+            {
+              "title": "Tempo traces",
+              "type": "link",
+              "url": "/explore",
+              "targetBlank": false
+            }
+          ]
+        }
+        DASHBOARD
         exec /run.sh
     volumes:
       - grafana_data:/var/lib/grafana
     ports:
-      - '3001:3001'
+      - '127.0.0.1:3001:3001'
     depends_on:
       prometheus:
         condition: service_healthy

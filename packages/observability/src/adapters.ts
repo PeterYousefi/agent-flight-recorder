@@ -1,4 +1,4 @@
-import { SpanKind } from '@opentelemetry/api'
+import { SpanKind, metrics } from '@opentelemetry/api'
 import {
   createMessageEnvelope,
   type MessageBus,
@@ -11,12 +11,19 @@ import {
 } from '@afr/domain'
 import { traced, traceContext, parentContext } from './tracing.js'
 export function observeBus(bus: MessageBus): MessageBus {
+  const meter = metrics.getMeter('agent-flight-recorder', '1.0.0')
+  const published = meter.createCounter('queue_published_total')
+  const consumed = meter.createCounter('queue_consumed_total')
+  const retried = meter.createCounter('queue_transport_retries_total')
   return {
     publish: (message) =>
       traced(
         'queue.publish',
         { 'execution.id': message.executionId, 'messaging.system': 'servicebus' },
-        () => bus.publish(createMessageEnvelope({ ...message, ...traceContext() })),
+        async () => {
+          await bus.publish(createMessageEnvelope({ ...message, ...traceContext() }))
+          published.add(1)
+        },
         parentContext(message.traceparent),
         SpanKind.PRODUCER,
       ),
@@ -29,7 +36,12 @@ export function observeBus(bus: MessageBus): MessageBus {
           traced(
             'queue.consume',
             { 'execution.id': message.executionId, 'messaging.system': 'servicebus' },
-            () => Promise.resolve(handler(message)),
+            async () => {
+              const result = await handler(message)
+              consumed.add(1)
+              if (result.kind === 'RETRY') retried.add(1)
+              return result
+            },
             parentContext(message.traceparent),
             SpanKind.CONSUMER,
           ),
