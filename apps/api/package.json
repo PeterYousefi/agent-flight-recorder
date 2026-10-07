@@ -1,0 +1,31 @@
+{
+  "name": "@afr/api",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Fastify REST API — execution management, idempotency, queue publish",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "start": "node dist/server.js",
+    "test": "vitest run",
+    "test:unit": "vitest run --config vitest.unit.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "lint": "eslint src",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src"
+  },
+  "dependencies": {
+    "@afr/domain": "workspace:*",
+    "@afr/observability": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.29",
+    "@vitest/coverage-v8": "5.0.3",
+    "tsx": "4.19.4",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

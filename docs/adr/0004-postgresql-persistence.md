@@ -6,6 +6,7 @@
 ## Context
 
 The system needs a relational store for:
+
 - Execution lifecycle state (current status, idempotency key, budget policy)
 - Ordered event logs (monotonic sequence per execution)
 - Attempt records (start/end timestamps, error details, attempt number)
@@ -16,6 +17,7 @@ The system needs a relational store for:
 - Artifact metadata
 
 Requirements:
+
 - Strong consistency for state transitions (optimistic locking or SELECT FOR UPDATE)
 - Ordered queries by `created_at`, `sequence`, `status`
 - Idempotency key lookups (unique constraint + index)
@@ -46,6 +48,7 @@ Requirements:
 ### Why not Drizzle ORM
 
 Drizzle is a strong alternative with a lighter footprint. Chose Prisma because:
+
 - Prisma's migration tooling is more mature and the history model (committed migration files) is more appropriate for a portfolio project where the schema evolution should be visible.
 - Prisma's generated client has better IDE completion for complex queries.
 - Drizzle would be a valid choice for a greenfield project prioritizing performance over migration ergonomics.
@@ -69,16 +72,16 @@ SQLite lacks `SELECT FOR UPDATE`, which is needed for the idempotency lock patte
 
 ## Indexes (explicit, justified)
 
-| Table | Index | Reason |
-|---|---|---|
-| `executions` | `status` | Filter by status on overview dashboard |
-| `executions` | `created_at` | Time-range queries |
-| `executions` | `provider` | Filter by provider |
-| `executions` | `idempotency_key` (unique) | Idempotency deduplication |
-| `execution_events` | `(execution_id, sequence)` | Ordered event log retrieval |
-| `execution_events` | `event_type` | Filter events by type |
-| `dead_letters` | `created_at` | Dead-letter queue ordered inspection |
-| `audit_records` | `execution_id` | Per-execution audit trail |
+| Table              | Index                      | Reason                                 |
+| ------------------ | -------------------------- | -------------------------------------- |
+| `executions`       | `status`                   | Filter by status on overview dashboard |
+| `executions`       | `created_at`               | Time-range queries                     |
+| `executions`       | `provider`                 | Filter by provider                     |
+| `executions`       | `idempotency_key` (unique) | Idempotency deduplication              |
+| `execution_events` | `(execution_id, sequence)` | Ordered event log retrieval            |
+| `execution_events` | `event_type`               | Filter events by type                  |
+| `dead_letters`     | `created_at`               | Dead-letter queue ordered inspection   |
+| `audit_records`    | `execution_id`             | Per-execution audit trail              |
 
 ## Azure Mapping
 

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "tsconfig.tsbuildinfo",
+    "paths": {
+      "@afr/domain": ["../../packages/domain/src/index.ts"],
+      "@afr/observability": ["../../packages/observability/src/index.ts"]
+    }
+  },
+  "references": [{ "path": "../../packages/domain" }, { "path": "../../packages/observability" }],
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.integration.test.ts"]
+}

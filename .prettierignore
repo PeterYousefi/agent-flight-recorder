@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.tsbuildinfo
+pnpm-lock.yaml
+# Prisma generated client
+packages/domain/src/generated/
+# Grafana dashboard JSON (auto-generated, not hand-edited)
+infra/local/grafana/dashboards/

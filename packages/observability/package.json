@@ -1,0 +1,31 @@
+{
+  "name": "@afr/observability",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenTelemetry SDK setup, structured logger, metrics definitions, correlation ID utilities",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:unit": "vitest run",
+    "test:integration": "echo 'No integration tests in observability package'",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "lint": "eslint src",
+    "format": "prettier --write src",
+    "format:check": "prettier --check src"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "5.0.3",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

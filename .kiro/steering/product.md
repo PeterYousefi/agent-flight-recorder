@@ -30,17 +30,19 @@ AI agent frameworks (including Sapiom) excel at defining and running agent logic
 - OpenTelemetry traces spanning agent → tool → result
 - a dashboard showing operational health across all executions
 
-Agent Flight Recorder provides exactly this control and observability layer. It sits *around* agent execution, not inside it.
+Agent Flight Recorder provides exactly this control and observability layer. It sits _around_ agent execution, not inside it.
 
 ## Relationship to Sapiom
 
 Sapiom is an execution engine and capability network for AI agents. It provides:
+
 - a typed agent authoring SDK (`@sapiom/agent`)
 - a capability client for invoking tools (`@sapiom/tools`)
 - a deployment and scheduling CLI (`@sapiom/cli`)
 - a model router
 
 Sapiom does **not** currently expose a public API for:
+
 - querying execution status and history
 - tracking per-execution costs in a structured, queryable way
 - defining budget policies that block or stop executions

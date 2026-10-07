@@ -6,6 +6,7 @@
 ## Context
 
 The worker architecture requires a reliable message queue with:
+
 - At-least-once delivery semantics
 - Dead-letter support for terminal failures
 - Delayed/scheduled re-delivery for retry backoff
@@ -25,24 +26,30 @@ The queue transport must not leak into domain or application logic. If we ever s
 export interface Message<T = unknown> {
   id: string
   body: T
-  attributes: Record<string, string>  // carries OTel trace context
+  attributes: Record<string, string> // carries OTel trace context
   enqueuedAt: Date
   deliveryCount: number
 }
 
-export type MessageHandler<T = unknown> = (
-  message: Message<T>
-) => Promise<void>
+export type MessageHandler<T = unknown> = (message: Message<T>) => Promise<void>
 
 export interface MessageBus {
-  publish(queue: string, message: Omit<Message, 'enqueuedAt' | 'deliveryCount'>, options?: PublishOptions): Promise<void>
-  subscribe(queue: string, handler: MessageHandler, options?: SubscribeOptions): Promise<Subscription>
+  publish(
+    queue: string,
+    message: Omit<Message, 'enqueuedAt' | 'deliveryCount'>,
+    options?: PublishOptions,
+  ): Promise<void>
+  subscribe(
+    queue: string,
+    handler: MessageHandler,
+    options?: SubscribeOptions,
+  ): Promise<Subscription>
   deadLetter(messageId: string, reason: string, description?: string): Promise<void>
   close(): Promise<void>
 }
 
 export interface PublishOptions {
-  scheduledEnqueueTimeUtc?: Date   // for delayed retry
+  scheduledEnqueueTimeUtc?: Date // for delayed retry
   sessionId?: string
 }
 
@@ -84,6 +91,7 @@ The same `ServiceBusMessageBus` implementation targets a real Azure Service Bus 
 ### Why the abstraction matters
 
 Without the `MessageBus` interface, `@azure/service-bus` types would appear in worker code, making it impossible to unit test message handling logic without a running Service Bus instance. The abstraction allows:
+
 - Workers to be unit tested with `InMemoryMessageBus`
 - Integration tests to use `InMemoryMessageBus` or the real emulator
 - Production to use the real Azure Service Bus without code changes

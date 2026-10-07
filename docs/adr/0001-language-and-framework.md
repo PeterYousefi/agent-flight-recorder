@@ -6,6 +6,7 @@
 ## Context
 
 Agent Flight Recorder needs a backend language and framework for:
+
 - A REST API serving execution management operations
 - An async worker consuming a message queue and invoking execution providers
 - Shared domain logic (state machine, event schemas, budget policies)
@@ -30,6 +31,7 @@ Formatter: **Prettier**.
 ### Sapiom SDK is TypeScript-first
 
 Sapiom's public SDK (`@sapiom/agent`, `@sapiom/tools`, `@sapiom/cli`) is authored in TypeScript and published to npm. Consuming these packages from TypeScript gives:
+
 - Native type checking against SDK interfaces — no stubs or type generation required
 - Shared type definitions between our domain model and provider adapters
 - Identical toolchain across all layers (lint, format, typecheck, test)

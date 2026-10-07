@@ -3,6 +3,7 @@
 ## What Sapiom Is
 
 Sapiom is an AI agent execution platform. It provides:
+
 - A typed agent authoring SDK (`@sapiom/agent`) for defining step-graph agents
 - A capability client (`@sapiom/tools`) for invoking tools (sandboxes, coding models, search, file storage, etc.)
 - A deployment and scheduling CLI (`@sapiom/cli`)
@@ -23,7 +24,7 @@ Agent Flight Recorder integrates with Sapiom via `@sapiom/tools` in the `SapiomP
 ### Authentication
 
 ```typescript
-import { createClient } from "@sapiom/tools"
+import { createClient } from '@sapiom/tools'
 
 const client = createClient({ apiKey: process.env.SAPIOM_API_KEY })
 ```
@@ -34,17 +35,18 @@ The `apiKey` is a Sapiom API key from the Sapiom console. It is optional — whe
 
 The `SapiomProvider` maps an `ExecutionRequest` to a Sapiom tool call based on the `operation` field:
 
-| `operation` value | `@sapiom/tools` call | Description |
-|---|---|---|
+| `operation` value   | `@sapiom/tools` call                                | Description                       |
+| ------------------- | --------------------------------------------------- | --------------------------------- |
 | `models.coding.run` | `client.models.coding.run({ task, gitRepository })` | Run a coding model against a repo |
-| `search.web` | `client.search.web({ query })` | Web search capability |
-| `sandboxes.run` | `client.sandboxes.run({ code, language })` | Code sandbox execution |
+| `search.web`        | `client.search.web({ query })`                      | Web search capability             |
+| `sandboxes.run`     | `client.sandboxes.run({ code, language })`          | Code sandbox execution            |
 
 These map to documented capabilities in `@sapiom/tools`. We call only methods we have verified exist in the published SDK.
 
 ### What we do NOT call
 
 We do not call any `@sapiom/tools` method for:
+
 - Querying execution status or history
 - Retrieving per-execution cost data
 - Setting budget policies
@@ -58,17 +60,17 @@ These capabilities do not exist in Sapiom's public SDK as of October 2026. They 
 
 When a Sapiom tool call flows through the control plane, it gains:
 
-| Capability | Provided by |
-|---|---|
-| Durable execution state | Agent Flight Recorder (PostgreSQL) |
-| Structured event log | Agent Flight Recorder |
-| Budget enforcement | Agent Flight Recorder (`BudgetPolicy`) |
-| Retry with backoff | Agent Flight Recorder (worker) |
-| Dead-letter handling | Agent Flight Recorder |
-| Replay | Agent Flight Recorder |
-| OTel distributed traces | Agent Flight Recorder |
-| Prometheus metrics | Agent Flight Recorder |
-| Operational dashboard | Agent Flight Recorder |
+| Capability              | Provided by                            |
+| ----------------------- | -------------------------------------- |
+| Durable execution state | Agent Flight Recorder (PostgreSQL)     |
+| Structured event log    | Agent Flight Recorder                  |
+| Budget enforcement      | Agent Flight Recorder (`BudgetPolicy`) |
+| Retry with backoff      | Agent Flight Recorder (worker)         |
+| Dead-letter handling    | Agent Flight Recorder                  |
+| Replay                  | Agent Flight Recorder                  |
+| OTel distributed traces | Agent Flight Recorder                  |
+| Prometheus metrics      | Agent Flight Recorder                  |
+| Operational dashboard   | Agent Flight Recorder                  |
 
 None of these exist in Sapiom's public API surface. This is additive infrastructure, not duplication.
 

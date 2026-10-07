@@ -8,6 +8,7 @@
 AI agent executions cross multiple process boundaries: HTTP API → message queue → worker → execution provider. Understanding what happened during a failure requires traces that span these boundaries, not just logs from individual components.
 
 Requirements:
+
 - Distributed tracing across HTTP and async queue boundaries
 - Structured metrics for executions, costs, retries, and dead letters
 - Structured logs correlated to traces
@@ -62,20 +63,20 @@ artifact.persist                        — artifact storage
 
 All metrics are defined in `packages/observability/src/metrics.ts`:
 
-| Metric | Type | Labels |
-|---|---|---|
-| `afr_executions_total` | Counter | `status`, `provider` |
-| `afr_executions_succeeded_total` | Counter | `provider` |
-| `afr_executions_failed_total` | Counter | `provider`, `failure_type` |
-| `afr_execution_duration_seconds` | Histogram | `provider`, `status` |
-| `afr_execution_retry_total` | Counter | `provider`, `attempt` |
-| `afr_execution_replay_total` | Counter | `mode` |
-| `afr_dead_letter_total` | Counter | `provider`, `reason` |
-| `afr_budget_rejections_total` | Counter | `provider`, `policy_type` |
-| `afr_estimated_cost_usd` | Histogram | `provider` |
-| `afr_tool_invocations_total` | Counter | `provider`, `tool_name`, `status` |
-| `afr_provider_errors_total` | Counter | `provider`, `error_type` |
-| `afr_queue_depth` | Gauge | `queue_name` |
+| Metric                           | Type      | Labels                            |
+| -------------------------------- | --------- | --------------------------------- |
+| `afr_executions_total`           | Counter   | `status`, `provider`              |
+| `afr_executions_succeeded_total` | Counter   | `provider`                        |
+| `afr_executions_failed_total`    | Counter   | `provider`, `failure_type`        |
+| `afr_execution_duration_seconds` | Histogram | `provider`, `status`              |
+| `afr_execution_retry_total`      | Counter   | `provider`, `attempt`             |
+| `afr_execution_replay_total`     | Counter   | `mode`                            |
+| `afr_dead_letter_total`          | Counter   | `provider`, `reason`              |
+| `afr_budget_rejections_total`    | Counter   | `provider`, `policy_type`         |
+| `afr_estimated_cost_usd`         | Histogram | `provider`                        |
+| `afr_tool_invocations_total`     | Counter   | `provider`, `tool_name`, `status` |
+| `afr_provider_errors_total`      | Counter   | `provider`, `error_type`          |
+| `afr_queue_depth`                | Gauge     | `queue_name`                      |
 
 All metrics are prefixed `afr_` (Agent Flight Recorder) to avoid collision in shared Prometheus instances.
 
@@ -108,6 +109,7 @@ W3C Trace Context propagation across async boundaries is the correct approach, a
 ## Azure Production Mapping
 
 In production, the OTel Collector's exporters are reconfigured:
+
 - Traces: `otlp` exporter → Azure Monitor Application Insights
 - Metrics: `prometheusremotewrite` or Azure Monitor metrics exporter
 - Logs: `azuremonitorlogs` exporter

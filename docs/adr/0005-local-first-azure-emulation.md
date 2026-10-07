@@ -13,16 +13,16 @@ The goal is: identical application code, identical SDK usage, different infrastr
 
 **All Azure services are emulated locally via Docker. The application code uses Azure SDKs unchanged. Only connection strings differ between local and cloud environments.**
 
-| Concern | Local (Docker) | Azure (optional, explicit opt-in) |
-|---|---|---|
-| Message queue | Azure Service Bus emulator (`mcr.microsoft.com/azure-messaging/servicebus-emulator`) | Azure Service Bus Standard/Premium |
-| Object storage | Azurite (`mcr.microsoft.com/azure-storage/azurite`) | Azure Blob Storage |
-| Secrets | `.env` file | Azure Key Vault (via `@azure/keyvault-secrets`) |
-| Relational DB | `postgres:16-alpine` | Azure Database for PostgreSQL Flexible Server |
-| Metrics | Prometheus | Azure Monitor (custom metrics via OTel exporter) |
-| Traces | Grafana Tempo | Azure Monitor Application Insights (via OTel exporter) |
-| Logs | stdout → OTel Collector | Azure Monitor Log Analytics (via OTel exporter) |
-| API/Worker runtime | Local Node.js | Azure Container Apps |
+| Concern            | Local (Docker)                                                                       | Azure (optional, explicit opt-in)                      |
+| ------------------ | ------------------------------------------------------------------------------------ | ------------------------------------------------------ |
+| Message queue      | Azure Service Bus emulator (`mcr.microsoft.com/azure-messaging/servicebus-emulator`) | Azure Service Bus Standard/Premium                     |
+| Object storage     | Azurite (`mcr.microsoft.com/azure-storage/azurite`)                                  | Azure Blob Storage                                     |
+| Secrets            | `.env` file                                                                          | Azure Key Vault (via `@azure/keyvault-secrets`)        |
+| Relational DB      | `postgres:16-alpine`                                                                 | Azure Database for PostgreSQL Flexible Server          |
+| Metrics            | Prometheus                                                                           | Azure Monitor (custom metrics via OTel exporter)       |
+| Traces             | Grafana Tempo                                                                        | Azure Monitor Application Insights (via OTel exporter) |
+| Logs               | stdout → OTel Collector                                                              | Azure Monitor Log Analytics (via OTel exporter)        |
+| API/Worker runtime | Local Node.js                                                                        | Azure Container Apps                                   |
 
 ## Rationale
 

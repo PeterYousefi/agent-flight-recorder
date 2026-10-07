@@ -48,6 +48,7 @@ If the worker crashes mid-execution, the message remains in the queue (unacked) 
 ### Retry architecture
 
 Retries are implemented as re-enqueue with a delay, not as in-process loops. This means:
+
 - The worker process does not block waiting for a retry window
 - Retry state is durable — a worker restart does not lose retry context
 - Exponential backoff is implemented at the queue scheduling level

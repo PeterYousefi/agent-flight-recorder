@@ -13,6 +13,7 @@ This is not a goal. It is a hard constraint. Every architectural decision must b
 ## What This Means in Practice
 
 The complete development and demo experience runs on:
+
 - Local machine
 - Docker Desktop
 - Azure emulators (Azurite, Service Bus emulator) running inside Docker
@@ -23,6 +24,7 @@ No Azure subscription is required. No Azure resource is created. No Azure credit
 ## Prohibited Actions During Normal Operation
 
 The following commands must NEVER execute automatically during:
+
 - `docker compose up`
 - `make dev`, `make test`, `make demo`
 - CI pipeline runs
@@ -77,14 +79,14 @@ fi
 
 ## Local Emulator Mapping
 
-| What the code uses | What runs locally | What it would be in Azure |
-|---|---|---|
-| `MessageBus` (ServiceBus transport) | Azure Service Bus emulator in Docker | Azure Service Bus (Standard/Premium tier) |
-| `ArtifactStore` (Azurite transport) | Azurite in Docker | Azure Blob Storage |
-| Secrets / config | `.env` file | Azure Key Vault |
-| Metrics + traces | OTel Collector → Prometheus + Grafana + Tempo | Azure Monitor + Application Insights |
-| Relational DB | PostgreSQL in Docker | Azure Database for PostgreSQL Flexible Server |
-| API + Worker | Local Node.js processes | Azure Container Apps |
+| What the code uses                  | What runs locally                             | What it would be in Azure                     |
+| ----------------------------------- | --------------------------------------------- | --------------------------------------------- |
+| `MessageBus` (ServiceBus transport) | Azure Service Bus emulator in Docker          | Azure Service Bus (Standard/Premium tier)     |
+| `ArtifactStore` (Azurite transport) | Azurite in Docker                             | Azure Blob Storage                            |
+| Secrets / config                    | `.env` file                                   | Azure Key Vault                               |
+| Metrics + traces                    | OTel Collector → Prometheus + Grafana + Tempo | Azure Monitor + Application Insights          |
+| Relational DB                       | PostgreSQL in Docker                          | Azure Database for PostgreSQL Flexible Server |
+| API + Worker                        | Local Node.js processes                       | Azure Container Apps                          |
 
 ## Verifying Zero Spend
 
@@ -99,6 +101,7 @@ Under normal development, this should return an empty table or only resources yo
 ## Dependency on Paid External APIs
 
 The project must run completely without:
+
 - A Sapiom API key (`SAPIOM_API_KEY` absent → MockProvider is used automatically)
 - Any LLM API key (OpenAI, Anthropic, etc.)
 - Any paid search or data API

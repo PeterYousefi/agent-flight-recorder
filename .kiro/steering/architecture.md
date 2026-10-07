@@ -43,6 +43,7 @@ interface MessageBus {
 ```
 
 Implementations:
+
 - `InMemoryMessageBus` — used in unit tests, zero external dependencies
 - `ServiceBusMessageBus` — wraps `@azure/service-bus` targeting the official Azure Service Bus emulator locally, or real Azure Service Bus in production
 
@@ -54,12 +55,12 @@ Prisma for schema migrations, strong typing, and async support. PostgreSQL in Do
 
 ### Local Azure Emulation
 
-| Cloud Service | Local Emulator |
-|---|---|
-| Azure Service Bus | `mcr.microsoft.com/azure-messaging/servicebus-emulator` + SQL Server sidecar |
-| Azure Blob Storage | `mcr.microsoft.com/azure-storage/azurite` |
-| Azure Key Vault | `.env` file + environment variables (dev only) |
-| Azure Monitor | OpenTelemetry Collector + Prometheus + Grafana + Tempo |
+| Cloud Service      | Local Emulator                                                               |
+| ------------------ | ---------------------------------------------------------------------------- |
+| Azure Service Bus  | `mcr.microsoft.com/azure-messaging/servicebus-emulator` + SQL Server sidecar |
+| Azure Blob Storage | `mcr.microsoft.com/azure-storage/azurite`                                    |
+| Azure Key Vault    | `.env` file + environment variables (dev only)                               |
+| Azure Monitor      | OpenTelemetry Collector + Prometheus + Grafana + Tempo                       |
 
 See `docs/adr/0005-local-first-azure-emulation.md`.
 
@@ -70,6 +71,7 @@ Every execution carries: `execution_id`, `trace_id`, `span_id`, `agent_id`, `pro
 ### Replay Semantics
 
 Two modes:
+
 1. **Input replay** — same normalized input, new execution, links `original_execution_id`. Uses live providers.
 2. **Simulation replay** — same normalized input, but forces the `MockProvider`. Safe for incident investigation without side effects.
 
@@ -96,6 +98,7 @@ Worker consumes "executions" queue
 ## Persistence Model
 
 Primary tables (managed by Prisma migrations):
+
 - `executions` — lifecycle state, idempotency key, budget policy
 - `execution_attempts` — per-attempt record with start/end/error
 - `execution_events` — ordered event log per execution (monotonic sequence)
@@ -121,6 +124,7 @@ interface ExecutionProvider {
 ```
 
 Implementations:
+
 - `MockProvider` — deterministic, supports failure injection scenarios
 - `SapiomProvider` — wraps `@sapiom/tools` `createClient()`. Requires `SAPIOM_API_KEY`. Falls back to mock mode when key is absent.
 

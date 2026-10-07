@@ -383,24 +383,24 @@ agent-flight-recorder/
 
 ## API Endpoint Summary
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/v1/executions` | Create execution |
-| GET | `/api/v1/executions` | List executions (paginated, filtered) |
-| GET | `/api/v1/executions/:id` | Get execution detail |
-| GET | `/api/v1/executions/:id/events` | Get execution event log |
-| GET | `/api/v1/executions/:id/cost` | Get execution cost breakdown |
-| GET | `/api/v1/executions/:id/artifacts` | List execution artifacts |
-| GET | `/api/v1/executions/:id/trace` | Get trace correlation IDs |
-| POST | `/api/v1/executions/:id/cancel` | Cancel execution |
-| POST | `/api/v1/executions/:id/retry` | Manual retry (re-enqueue) |
-| POST | `/api/v1/executions/:id/replay` | Replay execution (input or simulation) |
-| GET | `/api/v1/dead-letter` | List dead-lettered executions |
-| GET | `/api/v1/dead-letter/:id` | Get dead-letter detail |
-| POST | `/api/v1/dead-letter/:id/requeue` | Requeue dead-lettered execution |
-| GET | `/api/v1/health` | Health check |
-| GET | `/api/v1/ready` | Readiness check |
-| GET | `/metrics` | Prometheus metrics |
+| Method | Path                               | Description                            |
+| ------ | ---------------------------------- | -------------------------------------- |
+| POST   | `/api/v1/executions`               | Create execution                       |
+| GET    | `/api/v1/executions`               | List executions (paginated, filtered)  |
+| GET    | `/api/v1/executions/:id`           | Get execution detail                   |
+| GET    | `/api/v1/executions/:id/events`    | Get execution event log                |
+| GET    | `/api/v1/executions/:id/cost`      | Get execution cost breakdown           |
+| GET    | `/api/v1/executions/:id/artifacts` | List execution artifacts               |
+| GET    | `/api/v1/executions/:id/trace`     | Get trace correlation IDs              |
+| POST   | `/api/v1/executions/:id/cancel`    | Cancel execution                       |
+| POST   | `/api/v1/executions/:id/retry`     | Manual retry (re-enqueue)              |
+| POST   | `/api/v1/executions/:id/replay`    | Replay execution (input or simulation) |
+| GET    | `/api/v1/dead-letter`              | List dead-lettered executions          |
+| GET    | `/api/v1/dead-letter/:id`          | Get dead-letter detail                 |
+| POST   | `/api/v1/dead-letter/:id/requeue`  | Requeue dead-lettered execution        |
+| GET    | `/api/v1/health`                   | Health check                           |
+| GET    | `/api/v1/ready`                    | Readiness check                        |
+| GET    | `/metrics`                         | Prometheus metrics                     |
 
 ## Local Development Architecture
 
@@ -466,4 +466,4 @@ graph TD
   ACR -.->|image pull| ACA_WORKER
 ```
 
-*Deployment requires `ALLOW_AZURE_DEPLOY=true`. See `docs/azure-deployment.md`.*
+_Deployment requires `ALLOW_AZURE_DEPLOY=true`. See `docs/azure-deployment.md`._

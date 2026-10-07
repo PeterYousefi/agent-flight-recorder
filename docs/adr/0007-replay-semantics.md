@@ -8,6 +8,7 @@
 Replay is one of the core differentiating features of Agent Flight Recorder. When an execution fails — or even when a successful execution needs to be re-examined — the ability to re-run it with its original inputs is essential for incident investigation and debugging.
 
 However, "replay" is ambiguous. It can mean:
+
 1. "Run the same input again against live providers" (simple retry with original input)
 2. "Re-run deterministically against mocks for investigation" (simulation)
 3. "Reproduce the exact sequence of events bit-for-bit" (true deterministic replay)
@@ -38,7 +39,7 @@ Creates a new execution using the same normalized input, but forces `MockProvide
 
 ### What we explicitly do not claim
 
-We do not claim bit-for-bit deterministic replay. External providers (Sapiom, LLM APIs, search tools) are non-deterministic. The same input sent twice will produce similar but not identical outputs. Replay recreates the execution *context* — inputs, budget, configuration — not the exact bytes of every response.
+We do not claim bit-for-bit deterministic replay. External providers (Sapiom, LLM APIs, search tools) are non-deterministic. The same input sent twice will produce similar but not identical outputs. Replay recreates the execution _context_ — inputs, budget, configuration — not the exact bytes of every response.
 
 This distinction is documented in the API contract, the UI, and `docs/replay.md`.
 
@@ -55,6 +56,7 @@ created_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 ```
 
 The `ExecutionEvent` for the replay includes:
+
 ```json
 {
   "event_type": "execution.replayed",
