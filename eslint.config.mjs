@@ -42,7 +42,7 @@ export default [
     // Ignore patterns
     ignores: [
       'node_modules/**',
-      'dist/**',
+      '**/dist/**',
       'build/**',
       '.next/**',
       'coverage/**',
