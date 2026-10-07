@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Post-Task Validation Gate",
+      "trigger": "PostTaskExec",
+      "action": {
+        "type": "agent",
+        "prompt": "A Kiro spec task was just completed. Before marking it done and moving on, perform the following validation sequence in order:\n\n1. Run `pnpm format:check` (or `pnpm --recursive run format:check`) — confirm zero formatting errors.\n2. Run `pnpm --recursive run lint` — confirm zero lint errors.\n3. Run `pnpm --recursive run typecheck` — confirm zero TypeScript errors.\n4. Run the relevant test scope for what was just implemented (unit tests at minimum, integration tests if infrastructure is available).\n5. Run `git diff --check` — confirm no whitespace errors.\n6. Scan the git diff for any secrets: API keys, tokens, passwords, connection strings containing real credentials. Check specifically for patterns like `api_key`, `secret`, `password`, `token`, `credential` in non-example files.\n7. Run `git status` — report which files are staged vs unstaged.\n\nIf ALL checks pass:\n- Stage only the files that belong to the completed task (not `git add .`)\n- Commit with a meaningful Conventional Commit message: `type(scope): description`\n- Push: `git push origin HEAD`\n- Verify the push succeeded\n\nIf ANY check fails:\n- Report exactly which check failed and what the error is\n- Do NOT commit\n- Fix the issue before proceeding"
+      }
+    }
+  ]
+}

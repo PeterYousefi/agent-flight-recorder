@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Pre-Task Context Check",
+      "trigger": "PreTaskExec",
+      "action": {
+        "type": "agent",
+        "prompt": "Before starting the next spec task, quickly verify:\n\n1. The previous task's commit was pushed to GitHub (run `git log --oneline -3` to confirm the last commit looks correct).\n2. The working directory is clean: `git status` shows no unexpected uncommitted changes.\n3. Docker services are running if the task requires infrastructure: `docker compose ps` (optional check).\n\nIf git status shows uncommitted changes from a previous task, resolve them before starting — either commit them if they are complete and passing, or report the situation.\n\nDo not start a new task on top of uncommitted work from a previous task."
+      }
+    }
+  ]
+}

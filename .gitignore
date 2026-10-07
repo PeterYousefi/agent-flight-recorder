@@ -1,0 +1,76 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build output
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Environment — NEVER commit real .env files
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# Secrets — belt and suspenders
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.crt
+*.cer
+*.der
+id_rsa
+id_ed25519
+secrets/
+
+# Prisma
+# Keep migrations committed. Only ignore the generated client.
+packages/domain/src/generated/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+test-results/
+playwright-report/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# IDE
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json.example
+.idea/
+*.swp
+*.swo
+*~
+
+# Docker volumes (if mounted locally)
+.docker/
+
+# Benchmark results (generated)
+benchmark-results/
+
+# pnpm
+.pnpm-store/
