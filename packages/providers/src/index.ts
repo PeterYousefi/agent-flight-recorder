@@ -5,3 +5,4 @@ export {
   type MockProviderOptions,
 } from './mock-provider.js'
 export { normalizeProviderResult } from './normalize.js'
+export { SapiomProvider } from './sapiom-provider.js'
