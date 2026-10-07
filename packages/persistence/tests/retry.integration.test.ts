@@ -99,6 +99,7 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)('durable retry 
     )
     const where = { executionId: { in: ids } }
     await prisma.messageOutbox.deleteMany({ where })
+    await prisma.deadLetterRecord.deleteMany({ where })
     await prisma.auditRecord.deleteMany({ where })
     await prisma.artifact.deleteMany({ where })
     await prisma.costRecord.deleteMany({ where })
@@ -128,12 +129,12 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)('durable retry 
       await dispatcher.dispatch()
       await bus.drain()
     }
-    expect((await store.getExecution(id))?.status).toBe(ExecutionStatus.FAILED)
+    expect((await store.getExecution(id))?.status).toBe(ExecutionStatus.DEAD_LETTERED)
     expect(await store.listAttempts(id)).toHaveLength(3)
   })
   it('never schedules permanent errors', async () => {
     const { id } = await harness('permanent')
-    expect((await store.getExecution(id))?.status).toBe(ExecutionStatus.FAILED)
+    expect((await store.getExecution(id))?.status).toBe(ExecutionStatus.DEAD_LETTERED)
     expect(
       (await store.listEvents(id)).some((e) => e.eventType === 'execution.retry_scheduled'),
     ).toBe(false)

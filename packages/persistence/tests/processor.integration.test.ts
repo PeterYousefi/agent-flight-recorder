@@ -89,6 +89,7 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       ).map((r) => r.id)
       const where = { executionId: { in: ids } }
       await prisma.messageOutbox.deleteMany({ where })
+      await prisma.deadLetterRecord.deleteMany({ where })
       await prisma.auditRecord.deleteMany({ where })
       await prisma.artifact.deleteMany({ where })
       await prisma.costRecord.deleteMany({ where })
@@ -193,7 +194,7 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       execute = () => Promise.reject(new Error('sensitive provider exception'))
       await processor.handle(message(id))
       execute = () => Promise.resolve({ kind: 'SUCCEEDED', output: { answer: 42 } })
-      expect((await store.getExecution(id))?.status).toBe(ExecutionStatus.FAILED)
+      expect((await store.getExecution(id))?.status).toBe(ExecutionStatus.DEAD_LETTERED)
       expect(JSON.stringify(await store.listEvents(id))).not.toContain(
         'sensitive provider exception',
       )

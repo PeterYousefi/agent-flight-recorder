@@ -37,6 +37,7 @@ model Execution {
   requeuedDeadLetters DeadLetterRecord[]   @relation("DeadLetterRequeue")
   audits              AuditRecord[]
   outbox              MessageOutbox[]
+  deadLetterRequeue    DeadLetterRequeue?
 
   @@index([status])
   @@index([createdAt])
@@ -149,6 +150,8 @@ model DeadLetterRecord {
   execution           Execution  @relation(fields: [executionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
   requeuedAsExecution Execution? @relation("DeadLetterRequeue", fields: [requeuedAsExecutionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
+  requeue DeadLetterRequeue?
+
   @@index([deadLetteredAt])
   @@index([executionId])
   @@map("dead_letters")
@@ -180,4 +183,16 @@ model MessageOutbox {
 
   @@index([publishedAt, availableAt])
   @@map("message_outbox")
+}
+
+model DeadLetterRequeue {
+  id             String   @id @db.Uuid
+  deadLetterId   String   @unique @map("dead_letter_id") @db.Uuid
+  newExecutionId String   @unique @map("new_execution_id") @db.Uuid
+  createdAt      DateTime @map("created_at") @db.Timestamptz(6)
+
+  deadLetter   DeadLetterRecord @relation(fields: [deadLetterId], references: [id], onDelete: Restrict)
+  newExecution Execution        @relation(fields: [newExecutionId], references: [id], onDelete: Restrict)
+
+  @@map("dead_letter_requeues")
 }

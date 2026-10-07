@@ -83,6 +83,14 @@ export interface ExecutionRepositories {
   createReplayRelationship(relationship: ReplayRelationship): Promise<void>
   getReplayRelationship(replayExecutionId: string): Promise<ReplayRelationship | undefined>
   createDeadLetter(record: DeadLetterRecord): Promise<void>
+  getDeadLetter(id: string): Promise<DeadLetterRecord | undefined>
+  createDeadLetterRequeue(
+    id: string,
+    deadLetterId: string,
+    newExecutionId: string,
+    createdAt: Date,
+  ): Promise<void>
+  getRequeuedExecutionId(deadLetterId: string): Promise<string | undefined>
   listDeadLetters(query?: ExecutionQuery): Promise<readonly DeadLetterRecord[]>
   createAuditRecord(record: AuditRecord): Promise<void>
   listAuditRecords(executionId: string): Promise<readonly AuditRecord[]>

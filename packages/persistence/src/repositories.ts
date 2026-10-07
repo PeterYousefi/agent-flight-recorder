@@ -258,6 +258,36 @@ class RepositorySession implements ExecutionRepositories {
   public async createDeadLetter(record: DeadLetterRecord): Promise<void> {
     await this.db.deadLetterRecord.create({ data: record })
   }
+  public async getDeadLetter(id: string): Promise<DeadLetterRecord | undefined> {
+    const row = await this.db.deadLetterRecord.findUnique({ where: { id } })
+    if (row === null) return undefined
+    return {
+      id: row.id,
+      executionId: row.executionId,
+      finalAttempt: row.finalAttempt,
+      reason: row.reason,
+      deadLetteredAt: row.deadLetteredAt,
+      ...(row.requeuedAsExecutionId === null
+        ? {}
+        : { requeuedAsExecutionId: row.requeuedAsExecutionId }),
+    }
+  }
+  public async createDeadLetterRequeue(
+    id: string,
+    deadLetterId: string,
+    newExecutionId: string,
+    createdAt: Date,
+  ): Promise<void> {
+    const original = await this.db.deadLetterRecord.findUnique({ where: { id: deadLetterId } })
+    if (original === null || original.executionId === newExecutionId)
+      throw new PersistenceError('INVALID_RECORD', 'Invalid dead-letter requeue relationship')
+    await this.db.deadLetterRequeue.create({
+      data: { id, deadLetterId, newExecutionId, createdAt },
+    })
+  }
+  public async getRequeuedExecutionId(deadLetterId: string): Promise<string | undefined> {
+    return (await this.db.deadLetterRequeue.findUnique({ where: { deadLetterId } }))?.newExecutionId
+  }
   public async listDeadLetters(query: ExecutionQuery = {}): Promise<readonly DeadLetterRecord[]> {
     return (
       await this.db.deadLetterRecord.findMany({

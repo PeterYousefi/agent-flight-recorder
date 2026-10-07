@@ -98,4 +98,30 @@ export async function recordFailure(
     ExecutionStatus.FAILED,
     completedAt,
   )
+  await tx.createDeadLetter({
+    id: runtime.id(),
+    executionId: execution.id,
+    finalAttempt: attempt.attemptNumber,
+    reason: error.code,
+    deadLetteredAt: completedAt,
+  })
+  await tx.createAuditRecord({
+    id: runtime.id(),
+    executionId: execution.id,
+    action: 'execution.dead_lettered',
+    timestamp: completedAt,
+  })
+  await append(
+    tx,
+    execution.id,
+    ExecutionEventType.EXECUTION_DEAD_LETTERED,
+    { reason: error.code, attemptNumber: attempt.attemptNumber, error },
+    runtime,
+  )
+  await tx.updateExecutionSnapshot(
+    execution.id,
+    ExecutionStatus.FAILED,
+    ExecutionStatus.DEAD_LETTERED,
+    completedAt,
+  )
 }
