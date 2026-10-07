@@ -1,0 +1,553 @@
+# Agent Flight Recorder — Local Development Stack
+#
+# PROFILES:
+#   (default / no profile) — core services only: postgres, servicebus-emulator, azurite
+#   observability          — adds otel-collector, prometheus, tempo, grafana
+#
+# APPLE SILICON NOTE:
+#   The Azure Service Bus emulator and its SQL Server dependency are amd64-only images.
+#   Docker Desktop on Apple Silicon (M1/M2/M3/M4) runs them via Rosetta emulation.
+#   This adds ~200-400ms startup overhead but is functionally correct.
+#   No special Docker Desktop settings are required beyond the default Rosetta option
+#   ("Use Rosetta for x86/amd64 emulation on Apple Silicon") which is enabled by default.
+#
+# AZURE COST: $0 — all services are local emulators. No Azure resources are provisioned.
+
+x-logging: &default-logging
+  driver: 'json-file'
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+services:
+  # ──────────────────────────────────────────────
+  # PostgreSQL — primary relational store
+  # Native arm64 image, no platform override needed
+  # ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16.9-alpine
+    container_name: afr-postgres
+    environment:
+      POSTGRES_DB: agent_flight_recorder
+      POSTGRES_USER: afr_user
+      POSTGRES_PASSWORD: afr_password
+    ports:
+      - '5434:5432' # 5432 may conflict with a local PostgreSQL or other container
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U afr_user -d agent_flight_recorder']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────
+  # SQL Server 2022 — required dependency for Azure Service Bus emulator
+  # amd64-only: runs via Rosetta on Apple Silicon
+  # ──────────────────────────────────────────────
+  sqledge:
+    image: mcr.microsoft.com/mssql/server:2022-CU14-ubuntu-22.04
+    platform: linux/amd64
+    container_name: afr-sqledge
+    environment:
+      ACCEPT_EULA: 'Y'
+      MSSQL_SA_PASSWORD: 'ServiceBus!2024'
+      MSSQL_PID: 'Developer'
+    ports:
+      - '1433:1433'
+    volumes:
+      - sqledge_data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U SA -P 'ServiceBus!2024' -C -Q 'SELECT 1' || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+      start_period: 30s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────
+  # Service Bus Config Init — copies config.json into a named volume
+  # so servicebus-emulator can read it without a bind-mount.
+  # Workaround for Docker Desktop file-sharing restrictions on macOS Desktop path.
+  # ──────────────────────────────────────────────
+  servicebus-config-init:
+    image: alpine:3.21
+    container_name: afr-servicebus-config-init
+    volumes:
+      - servicebus_config:/config
+    # Writes the Service Bus entity config directly from an inline heredoc.
+    # The executions queue: 10 max deliveries, 5-min lock, DLQ on expiry.
+    command:
+      - sh
+      - -c
+      - |
+        cat > /config/Config.json << 'SBCONFIG'
+        {
+          "UserConfig": {
+            "Logging": {
+              "Type": "console"
+            },
+            "Namespaces": [
+              {
+                    "Name": "sbemulatorns",
+                "Queues": [
+                  {
+                    "Name": "executions",
+                    "Properties": {
+                      "DeadLetteringOnMessageExpiration": true,
+                      "DefaultMessageTimeToLive": "PT1H",
+                      "DuplicateDetectionHistoryTimeWindow": "PT5M",
+                      "ForwardDeadLetteredMessagesTo": "",
+                      "LockDuration": "PT5M",
+                      "MaxDeliveryCount": 10,
+                      "RequiresDuplicateDetection": false,
+                      "RequiresSession": false
+                    }
+                  }
+                ],
+                "Topics": []
+              }
+            ]
+          }
+        }
+        SBCONFIG
+        echo "Service Bus config written to /config/Config.json"
+        cat /config/Config.json
+    restart: 'no'
+
+  # ──────────────────────────────────────────────
+  # Azure Service Bus Emulator
+  # amd64-only: runs via Rosetta on Apple Silicon
+  # Health endpoint: http://localhost:5300/health
+  # AMQP port: 5672
+  # ──────────────────────────────────────────────
+  servicebus-emulator:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1
+    platform: linux/amd64
+    container_name: afr-servicebus
+    environment:
+      ACCEPT_EULA: 'Y'
+      SQL_SERVER: sqledge
+      MSSQL_SA_PASSWORD: 'ServiceBus!2024'
+    ports:
+      - '5672:5672' # AMQP
+      - '5300:5300' # HTTP management / health
+    volumes:
+      - servicebus_config:/ServiceBus_Emulator/ConfigFiles:ro
+    depends_on:
+      sqledge:
+        condition: service_healthy
+      servicebus-config-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['NONE']
+    restart: unless-stopped
+    logging: *default-logging
+
+  # The Service Bus emulator image has no shell or HTTP client, so its
+  # published health endpoint is checked from a small companion container.
+  servicebus-healthcheck:
+    image: curlimages/curl:8.10.1
+    container_name: afr-servicebus-healthcheck
+    depends_on:
+      servicebus-emulator:
+        condition: service_started
+    command: ['sleep', 'infinity']
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://servicebus-emulator:5300/health >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────
+  # Azurite — Azure Blob Storage emulator
+  # Native multi-arch image (arm64 + amd64)
+  # Blob: 10000, Queue: 10001, Table: 10002
+  # ──────────────────────────────────────────────
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.36.0
+    container_name: afr-azurite
+    command: >
+      azurite
+      --blobHost 0.0.0.0
+      --blobPort 10000
+      --queueHost 0.0.0.0
+      --queuePort 10001
+      --tableHost 0.0.0.0
+      --tablePort 10002
+      --location /data
+      --debug /data/debug.log
+      --loose
+    ports:
+      - '10000:10000' # Blob
+      - '10001:10001' # Queue
+      - '10002:10002' # Table
+    volumes:
+      - azurite_data:/data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'node -e "const net = require(''net''); const socket = net.createConnection(10000, ''127.0.0.1'', () => { socket.destroy(); process.exit(0); }); socket.on(''error'', () => process.exit(1));"',
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────
+  # OpenTelemetry Collector
+  # Receives OTLP from API + Worker, exports to Prometheus + Tempo
+  # OTLP gRPC: 4317, OTLP HTTP: 4318, Prometheus scrape: 8889
+  # Profile: observability
+  # ──────────────────────────────────────────────
+  otel-config-init:
+    image: alpine:3.21
+    container_name: afr-otel-config-init
+    volumes:
+      - otel_config:/config
+    command:
+      - sh
+      - -c
+      - |
+        cat > /config/otel-collector-config.yaml << 'OTELCONFIG'
+        receivers:
+          otlp:
+            protocols:
+              grpc:
+                endpoint: 0.0.0.0:4317
+              http:
+                endpoint: 0.0.0.0:4318
+        processors:
+          batch:
+            timeout: 5s
+            send_batch_size: 1024
+          memory_limiter:
+            check_interval: 1s
+            limit_mib: 256
+            spike_limit_mib: 64
+        exporters:
+          otlp/tempo:
+            endpoint: tempo:4317
+            tls:
+              insecure: true
+          prometheus:
+            endpoint: 0.0.0.0:8889
+            namespace: afr
+            const_labels:
+              deployment_environment: local
+          debug:
+            verbosity: basic
+        service:
+          telemetry:
+            logs:
+              level: warn
+          pipelines:
+            traces:
+              receivers: [otlp]
+              processors: [memory_limiter, batch]
+              exporters: [otlp/tempo, debug]
+            metrics:
+              receivers: [otlp]
+              processors: [memory_limiter, batch]
+              exporters: [prometheus, debug]
+            logs:
+              receivers: [otlp]
+              processors: [memory_limiter, batch]
+              exporters: [debug]
+        OTELCONFIG
+    restart: 'no'
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    container_name: afr-otel-collector
+    profiles:
+      - observability
+    command: ['--config=/etc/otelcol-config/otel-collector-config.yaml']
+    volumes:
+      - otel_config:/etc/otelcol-config:ro
+    depends_on:
+      otel-config-init:
+        condition: service_completed_successfully
+    ports:
+      - '4317:4317' # OTLP gRPC
+      - '4318:4318' # OTLP HTTP
+      - '8889:8889' # Prometheus metrics scrape endpoint
+    healthcheck:
+      test: ['NONE']
+    restart: unless-stopped
+    logging: *default-logging
+
+  otel-healthcheck:
+    image: curlimages/curl:8.10.1
+    container_name: afr-otel-healthcheck
+    profiles:
+      - observability
+    depends_on:
+      otel-collector:
+        condition: service_started
+    command: ['sleep', 'infinity']
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://otel-collector:8889/metrics >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────
+  # Prometheus — metrics storage
+  # Scrapes OTel Collector's /metrics endpoint
+  # UI: http://localhost:9090
+  # Profile: observability
+  # ──────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v3.13.4
+    container_name: afr-prometheus
+    profiles:
+      - observability
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=7d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - prometheus_data:/prometheus
+    # Write prometheus config from inline command to avoid bind-mount restriction
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /etc/prometheus
+        cat > /etc/prometheus/prometheus.yml << 'PROMCONFIG'
+        global:
+          scrape_interval: 15s
+          evaluation_interval: 15s
+          external_labels:
+            cluster: local
+            environment: development
+        scrape_configs:
+          - job_name: "otel-collector"
+            static_configs:
+              - targets: ["otel-collector:8889"]
+          - job_name: "prometheus"
+            static_configs:
+              - targets: ["localhost:9090"]
+        PROMCONFIG
+        exec /bin/prometheus \
+          --config.file=/etc/prometheus/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=7d \
+          --web.enable-lifecycle
+    ports:
+      - '9090:9090'
+    depends_on:
+      otel-healthcheck:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:9090/-/healthy || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────
+  # Grafana Tempo — distributed trace storage
+  # OTLP push: 4317 (internal from collector)
+  # Query HTTP: 3200
+  # Profile: observability
+  # ──────────────────────────────────────────────
+  tempo-config-init:
+    image: alpine:3.21
+    container_name: afr-tempo-config-init
+    volumes:
+      - tempo_config:/config
+    command:
+      - sh
+      - -c
+      - |
+        cat > /config/tempo.yaml << 'TEMPOCONFIG'
+        stream_over_http_enabled: true
+        server:
+          http_listen_port: 3200
+          log_level: warn
+        distributor:
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: 0.0.0.0:4317
+        ingester:
+          max_block_duration: 5m
+        compactor:
+          compaction:
+            block_retention: 1h
+        storage:
+          trace:
+            backend: local
+            local:
+              path: /var/tempo/blocks
+            wal:
+              path: /var/tempo/wal
+        TEMPOCONFIG
+    restart: 'no'
+
+  tempo:
+    image: grafana/tempo:2.10.8
+    container_name: afr-tempo
+    profiles:
+      - observability
+    command: ['-config.file=/etc/tempo-config/tempo.yaml']
+    volumes:
+      - tempo_config:/etc/tempo-config:ro
+      - tempo_data:/var/tempo
+    depends_on:
+      tempo-config-init:
+        condition: service_completed_successfully
+    ports:
+      - '3200:3200' # Tempo HTTP query
+      - '4319:4317' # OTLP gRPC (offset to avoid clash with collector)
+    healthcheck:
+      test: ['NONE']
+    restart: unless-stopped
+    logging: *default-logging
+
+  tempo-healthcheck:
+    image: curlimages/curl:8.10.1
+    container_name: afr-tempo-healthcheck
+    profiles:
+      - observability
+    depends_on:
+      tempo:
+        condition: service_started
+    command: ['sleep', 'infinity']
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://tempo:3200/ready >/dev/null']
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+    restart: unless-stopped
+    logging: *default-logging
+
+  # ──────────────────────────────────────────────
+  # Grafana — dashboards and visualization
+  # UI: http://localhost:3001 (admin/admin)
+  # Profile: observability
+  # ──────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.6.16
+    container_name: afr-grafana
+    profiles:
+      - observability
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_SECURITY_ADMIN_USER: admin
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_INSTALL_PLUGINS: ''
+      GF_SERVER_HTTP_PORT: '3001'
+    # Write datasource and dashboard provisioning configs inline
+    entrypoint:
+      - sh
+      - -c
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources /etc/grafana/provisioning/dashboards
+        cat > /etc/grafana/provisioning/datasources/datasources.yaml << 'DSCONFIG'
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            uid: prometheus
+            url: http://prometheus:9090
+            access: proxy
+            isDefault: true
+            jsonData:
+              timeInterval: "15s"
+              httpMethod: "POST"
+            editable: false
+          - name: Tempo
+            type: tempo
+            uid: tempo
+            url: http://tempo:3200
+            access: proxy
+            isDefault: false
+            jsonData:
+              serviceMap:
+                datasourceUid: "prometheus"
+              nodeGraph:
+                enabled: true
+            editable: false
+        DSCONFIG
+        cat > /etc/grafana/provisioning/dashboards/dashboards.yaml << 'DBCONFIG'
+        apiVersion: 1
+        providers:
+          - name: "Agent Flight Recorder"
+            orgId: 1
+            folder: "AFR"
+            type: file
+            disableDeletion: false
+            updateIntervalSeconds: 30
+            options:
+              path: /var/lib/grafana/dashboards
+        DBCONFIG
+        mkdir -p /var/lib/grafana/dashboards
+        exec /run.sh
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - '3001:3001'
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      tempo-healthcheck:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://localhost:3001/api/health || exit 1']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    restart: unless-stopped
+    logging: *default-logging
+
+volumes:
+  postgres_data:
+    driver: local
+  sqledge_data:
+    driver: local
+  azurite_data:
+    driver: local
+  servicebus_config:
+    driver: local
+  otel_config:
+    driver: local
+  tempo_config:
+    driver: local
+  prometheus_data:
+    driver: local
+  tempo_data:
+    driver: local
+  grafana_data:
+    driver: local
+
+networks:
+  default:
+    name: afr-network
+    driver: bridge

@@ -120,6 +120,11 @@ Services:
 - Grafana: http://localhost:3001 (admin/admin)
 - Prometheus: http://localhost:9090
 
+T-02 implementation notes:
+
+- Service Bus, OTel Collector, and Tempo use companion health-check containers because their images cannot run the required shell-based probes.
+- Grafana uses port 3001 locally instead of the port 3000 listed in ADR-0006.
+
 ---
 
 ## Demo Scenarios
