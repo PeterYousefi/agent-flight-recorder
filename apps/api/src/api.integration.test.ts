@@ -168,6 +168,28 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       expect(requeued.json().id).not.toBe(id)
       expect((await api.inject(`/api/v1/executions/${id}`)).json().status).toBe('DEAD_LETTERED')
     })
+    it('lists and queues credential-free demos and identifies the replay followup', async () => {
+      expect((await api.inject('/api/v1/demo/scenarios')).json().items).toHaveLength(10)
+      // Use the existing test agent so cleanup stays scoped to this suite.
+      const create = orchestrator.create.bind(orchestrator)
+      orchestrator.create = (value) => create({ ...(value as object), agentId })
+      try {
+        const response = await api.inject({
+          method: 'POST',
+          url: '/api/v1/demo/scenarios/replay/run',
+        })
+        expect(response.statusCode).toBe(202)
+        expect(response.json().provider).toBe('mock')
+        expect(response.json().followup_replay).toBe(true)
+        expect(response.json().synthetic_costs).toBe(true)
+        expect(
+          (await api.inject({ method: 'POST', url: '/api/v1/demo/scenarios/unknown/run' }))
+            .statusCode,
+        ).toBe(400)
+      } finally {
+        orchestrator.create = create
+      }
+    })
     it('exposes readiness and documented routes without credentials', async () => {
       expect((await api.inject('/api/v1/health')).statusCode).toBe(200)
       expect((await api.inject('/api/v1/ready')).statusCode).toBe(200)

@@ -16,6 +16,8 @@ import {
 } from '@afr/domain'
 import {
   ApplicationError,
+  DemoLab,
+  demoScenarios,
   type ExecutionOrchestrator,
   type DeadLetterService,
   type ReplayService,
@@ -319,6 +321,37 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
         kind: metadata.kind as ArtifactKind,
       })
       return snake(artifact)
+    },
+  )
+  api.get(
+    '/api/v1/demo/scenarios',
+    { schema: { summary: 'List credential-free demo scenarios' } },
+    async () => ({
+      items: demoScenarios.map(({ operation: _operation, ...scenario }) => scenario),
+    }),
+  )
+  api.post(
+    '/api/v1/demo/scenarios/:scenario/run',
+    {
+      schema: {
+        summary: 'Queue a deterministic mock demo',
+        params: {
+          type: 'object',
+          required: ['scenario'],
+          additionalProperties: false,
+          properties: { scenario: { type: 'string', enum: demoScenarios.map((s) => s.id) } },
+        },
+      },
+    },
+    async (req, reply) => {
+      const id = (req.params as { scenario: string }).scenario
+      const result = await new DemoLab(deps.orchestrator).run(id)
+      reply.code(202)
+      return {
+        ...executionDto(result.execution),
+        followup_replay: result.followupReplay,
+        synthetic_costs: true,
+      }
     },
   )
   api.get('/api/v1/health', { schema: { summary: 'Liveness' } }, async () => ({ status: 'ok' }))

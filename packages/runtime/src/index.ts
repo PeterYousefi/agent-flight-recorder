@@ -18,7 +18,6 @@ import {
   observeBus,
   observeProvider,
   observeArtifacts,
-  traced,
   log,
 } from '@afr/observability'
 import { readConfig } from './config.js'
@@ -93,12 +92,16 @@ export function startDispatcher(
 ): { close: () => Promise<void> } {
   let stopped = false
   let active: Promise<void> | undefined
+  let lastRecovery = 0
   const tick = (): void => {
     if (active !== undefined || stopped) return
-    active = traced('outbox.dispatch', {}, async () => {
-      await orchestrator.recoverPending()
+    active = (async () => {
+      if (Date.now() - lastRecovery >= 10000) {
+        await orchestrator.recoverPending()
+        lastRecovery = Date.now()
+      }
       await dispatcher.dispatch()
-    })
+    })()
       .catch(() => {
         log('outbox.unavailable', { status: 'retrying' })
       })
