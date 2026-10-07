@@ -9,6 +9,7 @@ export enum DomainErrorCode {
   UNSUPPORTED_EVENT_SCHEMA = 'UNSUPPORTED_EVENT_SCHEMA',
   INVALID_EVENT_SEQUENCE = 'INVALID_EVENT_SEQUENCE',
   INVALID_EVENT_STREAM = 'INVALID_EVENT_STREAM',
+  INVALID_CONTRACT = 'INVALID_CONTRACT',
 }
 
 export abstract class DomainError extends Error {
@@ -83,6 +84,12 @@ export class InvalidEventStreamError extends DomainError {
   }
 }
 
+export class InvalidContractError extends DomainError {
+  public constructor(message: string) {
+    super(DomainErrorCode.INVALID_CONTRACT, message)
+  }
+}
+
 export function domainErrorCodeLabel(code: DomainErrorCode): string {
   switch (code) {
     case DomainErrorCode.INVALID_STATE_TRANSITION:
@@ -101,6 +108,8 @@ export function domainErrorCodeLabel(code: DomainErrorCode): string {
       return 'Invalid event sequence'
     case DomainErrorCode.INVALID_EVENT_STREAM:
       return 'Invalid event stream'
+    case DomainErrorCode.INVALID_CONTRACT:
+      return 'Invalid contract value'
     default:
       return assertNever(code)
   }
