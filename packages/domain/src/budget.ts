@@ -1,10 +1,10 @@
 import { InvalidBudgetPolicyError } from './errors.js'
 
 export interface BudgetPolicy {
-  readonly maxCostUsd: number
-  readonly maxDurationSeconds: number
-  readonly maxAttempts: number
-  readonly maxToolCalls: number
+  readonly maxCostUsd?: number
+  readonly maxDurationSeconds?: number
+  readonly maxAttempts?: number
+  readonly maxToolCalls?: number
 }
 
 export interface NonNegativeMoney {
@@ -24,34 +24,40 @@ export function createBudgetPolicy(value: unknown): BudgetPolicy {
     throw new InvalidBudgetPolicyError('Budget policy must be an object')
   }
 
-  const maxCostUsd = readFiniteNumber(value, 'maxCostUsd')
-  const maxDurationSeconds = readFiniteNumber(value, 'maxDurationSeconds')
-  const maxAttempts = readInteger(value, 'maxAttempts')
-  const maxToolCalls = readInteger(value, 'maxToolCalls')
+  const maxCostUsd = readOptionalFiniteNumber(value, 'maxCostUsd')
+  const maxDurationSeconds = readOptionalFiniteNumber(value, 'maxDurationSeconds')
+  const maxAttempts = readOptionalInteger(value, 'maxAttempts')
+  const maxToolCalls = readOptionalInteger(value, 'maxToolCalls')
 
-  if (maxCostUsd < 0) {
+  if (maxCostUsd !== undefined && maxCostUsd < 0) {
     throw new InvalidBudgetPolicyError('maxCostUsd must be non-negative')
   }
-  if (maxDurationSeconds <= 0) {
+  if (maxDurationSeconds !== undefined && maxDurationSeconds <= 0) {
     throw new InvalidBudgetPolicyError('maxDurationSeconds must be greater than zero')
   }
-  if (maxAttempts <= 0) {
+  if (maxAttempts !== undefined && maxAttempts <= 0) {
     throw new InvalidBudgetPolicyError('maxAttempts must be greater than zero')
   }
-  if (maxToolCalls < 0) {
-    throw new InvalidBudgetPolicyError('maxToolCalls must be non-negative')
+  if (maxToolCalls !== undefined && maxToolCalls <= 0) {
+    throw new InvalidBudgetPolicyError('maxToolCalls must be greater than zero')
   }
 
   return Object.freeze({
-    maxCostUsd,
-    maxDurationSeconds,
-    maxAttempts,
-    maxToolCalls,
+    ...(maxCostUsd === undefined ? {} : { maxCostUsd }),
+    ...(maxDurationSeconds === undefined ? {} : { maxDurationSeconds }),
+    ...(maxAttempts === undefined ? {} : { maxAttempts }),
+    ...(maxToolCalls === undefined ? {} : { maxToolCalls }),
   })
 }
 
-function readFiniteNumber(record: Record<string, unknown>, field: string): number {
+function readOptionalFiniteNumber(
+  record: Record<string, unknown>,
+  field: string,
+): number | undefined {
   const value = record[field]
+  if (value === undefined) {
+    return undefined
+  }
   if (!isFiniteNumber(value)) {
     throw new InvalidBudgetPolicyError(`${field} must be a finite number`)
   }
@@ -59,8 +65,11 @@ function readFiniteNumber(record: Record<string, unknown>, field: string): numbe
   return value
 }
 
-function readInteger(record: Record<string, unknown>, field: string): number {
-  const value = readFiniteNumber(record, field)
+function readOptionalInteger(record: Record<string, unknown>, field: string): number | undefined {
+  const value = readOptionalFiniteNumber(record, field)
+  if (value === undefined) {
+    return undefined
+  }
   if (!Number.isInteger(value)) {
     throw new InvalidBudgetPolicyError(`${field} must be an integer`)
   }

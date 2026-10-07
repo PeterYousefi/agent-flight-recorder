@@ -4,6 +4,21 @@ export {
   type BudgetPolicy,
   type NonNegativeMoney,
 } from './budget.js'
+export {
+  canSpend,
+  canContinueDuration,
+  canStartAttempt,
+  canStartToolCall,
+  DEFAULT_BUDGET_WARNING_THRESHOLD,
+  evaluateBudget,
+  type BudgetDecision,
+  type BudgetDimension,
+  type BudgetEvaluation,
+  type BudgetExceededReason,
+  type BudgetObservation,
+  type ExecutionUsage,
+  type OperationCost,
+} from './budget-evaluator.js'
 export { AttemptStatus, createExecutionAttempt, type ExecutionAttempt } from './attempt.js'
 export {
   createExecution,
@@ -56,11 +71,7 @@ export {
   type ToolSucceededPayload,
   type ToolFailedPayload,
 } from './events.js'
-export {
-  isFinalExecutionEvent,
-  isPostTerminalMetadataEvent,
-  validateExecutionEventStream,
-} from './event-stream.js'
+export { isFinalExecutionEvent, validateExecutionEventStream } from './event-stream.js'
 export {
   ACTIVE_STATES,
   BLOCKED_STATES,

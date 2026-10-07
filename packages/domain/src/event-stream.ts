@@ -16,10 +16,6 @@ const FINAL_EVENT_TYPES = new Set<ExecutionEventType>([
   ExecutionEventType.EXECUTION_DEAD_LETTERED,
 ])
 
-const POST_TERMINAL_METADATA_EVENTS = new Set<ExecutionEventType>([
-  ExecutionEventType.EXECUTION_REPLAYED,
-])
-
 // Event factories validate individual facts; this helper validates stream order
 // and consistency. Database concurrency and global uniqueness remain persistence concerns.
 export function validateExecutionEventStream(
@@ -56,7 +52,7 @@ export function validateExecutionEventStream(
     if (previousEvent !== undefined && event.timestamp < previousEvent.timestamp) {
       throw new InvalidEventStreamError('Event timestamps must not move backwards')
     }
-    if (finalEventSeen && !POST_TERMINAL_METADATA_EVENTS.has(event.eventType)) {
+    if (finalEventSeen) {
       throw new InvalidEventStreamError(
         `Event ${event.eventType} cannot follow a final terminal event`,
       )
@@ -73,8 +69,4 @@ export function validateExecutionEventStream(
 
 export function isFinalExecutionEvent(event: ExecutionEvent): boolean {
   return FINAL_EVENT_TYPES.has(event.eventType)
-}
-
-export function isPostTerminalMetadataEvent(event: ExecutionEvent): boolean {
-  return POST_TERMINAL_METADATA_EVENTS.has(event.eventType)
 }

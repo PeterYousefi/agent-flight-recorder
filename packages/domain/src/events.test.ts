@@ -234,7 +234,7 @@ describe('execution event streams', () => {
     expect(isFinalExecutionEvent(events[2])).toBe(true)
   })
 
-  it('accepts replay metadata after a final terminal event', () => {
+  it('closes the original lifecycle stream after a final terminal event', () => {
     const terminal = createEvent(
       ExecutionEventType.EXECUTION_SUCCEEDED,
       2,
@@ -245,7 +245,8 @@ describe('execution event streams', () => {
       3,
       payloads[ExecutionEventType.EXECUTION_REPLAYED],
     )
-    expect(
+    expect(replayed.payload.originalExecutionId).not.toBe(executionId)
+    expect(() =>
       stream(
         createEvent(
           ExecutionEventType.EXECUTION_CREATED,
@@ -255,7 +256,7 @@ describe('execution event streams', () => {
         terminal,
         replayed,
       ),
-    ).toHaveLength(3)
+    ).toThrow(InvalidEventStreamError)
   })
 
   it.each([
