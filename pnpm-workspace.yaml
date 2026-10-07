@@ -1,3 +1,4 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+  - '!apps/lovable-ui' # Visual reference export; integrated into apps/web in T-27.

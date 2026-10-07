@@ -44,6 +44,7 @@ export default [
     // Ignore patterns
     ignores: [
       'node_modules/**',
+      'apps/lovable-ui/**',
       '**/dist/**',
       'build/**',
       '.next/**',
