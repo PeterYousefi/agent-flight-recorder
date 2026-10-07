@@ -21,6 +21,7 @@ import {
 import { Prisma, type PrismaClient } from '@prisma/client'
 import { executionFromRow, attemptFromRow, eventFromRow, json } from './mapping.js'
 import { PersistenceError } from './errors.js'
+import { createIdempotently } from './idempotency.js'
 
 function pagination(query: ExecutionQuery = {}): { take: number; skip: number } {
   const take = query.limit ?? 50
@@ -275,6 +276,11 @@ class RepositorySession implements ExecutionRepositories {
 export class PostgresExecutionStore extends RepositorySession implements ExecutionStore {
   public constructor(private readonly client: PrismaClient) {
     super(client)
+  }
+  public async createExecutionIdempotently(
+    execution: Execution,
+  ): Promise<{ execution: Execution; created: boolean }> {
+    return createIdempotently(this.client, execution, (db) => new RepositorySession(db))
   }
   public async transaction<T>(
     executionId: string,

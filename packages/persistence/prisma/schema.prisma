@@ -20,6 +20,7 @@ model Execution {
   completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
   currentAttempt      Int?      @map("current_attempt")
   idempotencyKey      String?   @unique @map("idempotency_key")
+  requestFingerprint  String?   @map("request_fingerprint")
   originalExecutionId String?   @map("original_execution_id") @db.Uuid
   budgetPolicy        Json?     @map("budget_policy")
   metadata            Json?

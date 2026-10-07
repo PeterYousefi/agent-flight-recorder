@@ -79,6 +79,9 @@ export interface ExecutionRepositories {
   listAuditRecords(executionId: string): Promise<readonly AuditRecord[]>
 }
 export interface ExecutionStore extends ExecutionRepositories {
+  createExecutionIdempotently(
+    execution: Execution,
+  ): Promise<{ readonly execution: Execution; readonly created: boolean }>
   // Locks a single execution before invoking the callback. All callback writes
   // commit together; callbacks must contain database work only, never providers.
   transaction<T>(

@@ -30,3 +30,9 @@ pnpm --filter @afr/persistence test:integration
 Tests cover actual database constraints, normalized request round trips, transaction rollback, concurrent appends, stale snapshots, exact bigint costs, attempt ownership, and relationship persistence. Normal workspace tests skip these suites when the test URL is absent.
 
 Current limitations: offset pagination is capped at 100 records; event append validation reads the execution's history. This favors correctness for the initial release. A durable outbox and worker claim/lease are subsequent application reliability work.
+
+## Durable creation idempotency
+
+`createExecutionIdempotently` commits the initial snapshot, creation event, request fingerprint, and audit record together. A unique idempotency key is the final arbiter under concurrency, including across distinct database clients. Repeating a key with the same normalized JSON request returns the original execution; changing input, provider, operation, agent, budget or metadata returns a conflict. SHA-256 fingerprints canonicalize object key order while preserving array order. Keys accept 1–128 ASCII letters, digits, dots, underscores, colons and hyphens. Missing keys create independent executions. Legacy keys without fingerprints fail closed on reuse.
+
+Keys are currently global to this local control plane. Multi-tenant deployments need an authenticated tenant scope in the uniqueness constraint. No provider call or message publication occurs during this creation transaction; durable scheduling is orchestration work.
