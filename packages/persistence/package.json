@@ -26,7 +26,9 @@
   "devDependencies": {
     "@types/node": "22.15.29",
     "prisma": "6.17.1",
-    "vitest": "5.0.3"
+    "vitest": "5.0.3",
+    "@afr/application": "workspace:*",
+    "@afr/adapters": "workspace:*"
   },
   "main": "./dist/src/index.js",
   "types": "./dist/src/index.d.ts",

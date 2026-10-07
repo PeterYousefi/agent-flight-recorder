@@ -15,6 +15,9 @@ import {
   type ReplayRelationship,
   type DeadLetterRecord,
   type AuditRecord,
+  type OutboxRecord,
+  createMessageEnvelope,
+  type MessageEnvelope,
   type ExecutionRepositories,
   type ExecutionStore,
 } from '@afr/domain'
@@ -35,6 +38,32 @@ function pagination(query: ExecutionQuery = {}): { take: number; skip: number } 
 class RepositorySession implements ExecutionRepositories {
   public constructor(protected readonly db: Prisma.TransactionClient) {}
 
+  public async createOutbox(record: OutboxRecord): Promise<void> {
+    const message = createMessageEnvelope(record.message)
+    if (message.messageId !== record.id || message.executionId !== record.executionId)
+      throw new PersistenceError('INVALID_RECORD', 'Outbox metadata does not match envelope')
+    await this.db.messageOutbox.create({ data: { ...record, message: json(message) } })
+  }
+  public async listPendingOutbox(now: Date, limit = 50): Promise<readonly OutboxRecord[]> {
+    return (
+      await this.db.messageOutbox.findMany({
+        where: { publishedAt: null, availableAt: { lte: now } },
+        ...pagination({ limit }),
+        orderBy: [{ availableAt: 'asc' }, { id: 'asc' }],
+      })
+    ).map((row) => ({
+      id: row.id,
+      executionId: row.executionId,
+      availableAt: row.availableAt,
+      message: createMessageEnvelope(row.message as unknown as MessageEnvelope),
+    }))
+  }
+  public async markOutboxPublished(id: string, now: Date): Promise<void> {
+    await this.db.messageOutbox.updateMany({
+      where: { id, publishedAt: null },
+      data: { publishedAt: now },
+    })
+  }
   public async createExecution(execution: Execution): Promise<Execution> {
     const request = createExecutionRequest(execution.request)
     const row = await this.db.execution.create({

@@ -141,4 +141,5 @@ export type {
   AuditRecord,
   ExecutionRepositories,
   ExecutionStore,
+  OutboxRecord,
 } from './persistence.js'

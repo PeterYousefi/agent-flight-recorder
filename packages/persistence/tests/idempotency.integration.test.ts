@@ -34,6 +34,7 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       const ids = (
         await prisma.execution.findMany({ where: { agentId }, select: { id: true } })
       ).map((row) => row.id)
+      await prisma.messageOutbox.deleteMany({ where: { executionId: { in: ids } } })
       await prisma.auditRecord.deleteMany({ where: { executionId: { in: ids } } })
       await prisma.executionEvent.deleteMany({ where: { executionId: { in: ids } } })
       await prisma.execution.deleteMany({ where: { id: { in: ids } } })

@@ -1,7 +1,7 @@
 import type { Execution, ExecutionStatus, ReplayMode } from './execution.js'
 import type { ExecutionAttempt } from './attempt.js'
 import type { ExecutionEvent } from './events.js'
-import type { JsonObject } from './messaging.js'
+import type { JsonObject, MessageEnvelope } from './messaging.js'
 
 export interface ExecutionQuery {
   readonly limit?: number
@@ -52,7 +52,16 @@ export interface AuditRecord {
 }
 
 // No database client or transport types cross this boundary.
+export interface OutboxRecord {
+  readonly id: string
+  readonly executionId: string
+  readonly message: MessageEnvelope
+  readonly availableAt: Date
+}
 export interface ExecutionRepositories {
+  createOutbox(record: OutboxRecord): Promise<void>
+  listPendingOutbox(now: Date, limit?: number): Promise<readonly OutboxRecord[]>
+  markOutboxPublished(id: string, now: Date): Promise<void>
   createExecution(execution: Execution): Promise<Execution>
   getExecution(id: string): Promise<Execution | undefined>
   listExecutions(query?: ExecutionQuery): Promise<readonly Execution[]>

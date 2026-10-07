@@ -55,8 +55,8 @@ jobs:
       - name: Generate persistence client
         run: pnpm --filter @afr/persistence prisma:generate
 
-      - name: Build domain interfaces
-        run: pnpm --filter @afr/domain build
+      - name: Build packages
+        run: pnpm build
 
       - name: Check formatting
         run: pnpm format:check
@@ -81,6 +81,3 @@ jobs:
         run: |
           pnpm --filter @afr/domain build
           pnpm --filter @afr/persistence test:integration
-
-      - name: Build packages
-        run: pnpm build

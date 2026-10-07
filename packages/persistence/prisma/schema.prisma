@@ -36,6 +36,7 @@ model Execution {
   deadLetter          DeadLetterRecord?
   requeuedDeadLetters DeadLetterRecord[]   @relation("DeadLetterRequeue")
   audits              AuditRecord[]
+  outbox              MessageOutbox[]
 
   @@index([status])
   @@index([createdAt])
@@ -165,4 +166,17 @@ model AuditRecord {
   @@index([executionId])
   @@index([timestamp])
   @@map("audit_records")
+}
+
+model MessageOutbox {
+  id          String    @id @db.Uuid
+  executionId String    @map("execution_id") @db.Uuid
+  message     Json
+  availableAt DateTime  @map("available_at") @db.Timestamptz(6)
+  publishedAt DateTime? @map("published_at") @db.Timestamptz(6)
+
+  execution Execution @relation(fields: [executionId], references: [id], onDelete: Restrict)
+
+  @@index([publishedAt, availableAt])
+  @@map("message_outbox")
 }
