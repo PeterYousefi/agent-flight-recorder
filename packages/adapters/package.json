@@ -21,7 +21,8 @@
   },
   "dependencies": {
     "@afr/domain": "workspace:*",
-    "@azure/service-bus": "7.10.0"
+    "@azure/service-bus": "7.10.0",
+    "@azure/storage-blob": "12.27.0"
   },
   "devDependencies": {
     "@types/node": "22.15.29",
