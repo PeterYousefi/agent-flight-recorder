@@ -12,7 +12,9 @@ export default [
     languageOptions: {
       parser: tsParser,
       parserOptions: {
-        projectService: true,
+        projectService: {
+          allowDefaultProject: ['packages/domain/src/*.test.ts', 'packages/domain/src/*.test.tsx'],
+        },
         tsconfigRootDir: import.meta.dirname,
       },
     },
