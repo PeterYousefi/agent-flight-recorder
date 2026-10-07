@@ -53,6 +53,7 @@ model ExecutionAttempt {
   status        String
   startedAt     DateTime  @map("started_at") @db.Timestamptz(6)
   completedAt   DateTime? @map("completed_at") @db.Timestamptz(6)
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.Timestamptz(6)
   errorCode     String?   @map("error_code")
   errorMessage  String?   @map("error_message")
   retryable     Boolean?

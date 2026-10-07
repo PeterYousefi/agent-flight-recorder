@@ -46,6 +46,7 @@ export function attemptFromRow(row: AttemptRow): ExecutionAttempt {
   return createExecutionAttempt({
     ...row,
     completedAt: row.completedAt ?? undefined,
+    leaseExpiresAt: row.leaseExpiresAt ?? undefined,
     errorCode: row.errorCode ?? undefined,
     errorMessage: row.errorMessage ?? undefined,
     retryable: row.retryable ?? undefined,

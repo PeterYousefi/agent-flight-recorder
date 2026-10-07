@@ -2,7 +2,7 @@
   "name": "@afr/worker",
   "version": "0.1.0",
   "private": true,
-  "description": "Async execution worker \u2014 queue consumer, state machine driver, provider invocation",
+  "description": "Async execution worker — queue consumer, state machine driver, provider invocation",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/worker.ts",
@@ -20,7 +20,8 @@
   "dependencies": {
     "@afr/domain": "workspace:*",
     "@afr/observability": "workspace:*",
-    "@afr/providers": "workspace:*"
+    "@afr/providers": "workspace:*",
+    "@afr/application": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.29",

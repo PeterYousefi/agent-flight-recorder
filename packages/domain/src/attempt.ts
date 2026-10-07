@@ -14,6 +14,7 @@ export interface ExecutionAttempt {
   readonly status: AttemptStatus
   readonly startedAt: Date
   readonly completedAt?: Date
+  readonly leaseExpiresAt?: Date
   readonly errorCode?: string
   readonly errorMessage?: string
   readonly retryable?: boolean
@@ -48,6 +49,9 @@ export function createExecutionAttempt(value: unknown): ExecutionAttempt {
     attemptNumber,
     status,
     startedAt: new Date(startedAt.getTime()),
+    ...(value.leaseExpiresAt === undefined
+      ? {}
+      : { leaseExpiresAt: readDate(value, 'leaseExpiresAt') }),
     ...(completedAt === undefined ? {} : { completedAt: new Date(completedAt.getTime()) }),
     ...(typeof value.errorCode === 'string' ? { errorCode: value.errorCode } : {}),
     ...(typeof value.errorMessage === 'string' ? { errorMessage: value.errorMessage } : {}),

@@ -82,6 +82,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@afr/application':
+        specifier: workspace:*
+        version: link:../../packages/application
       '@afr/domain':
         specifier: workspace:*
         version: link:../../packages/domain
