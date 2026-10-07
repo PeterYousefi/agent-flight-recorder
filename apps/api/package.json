@@ -5,10 +5,10 @@
   "description": "Fastify REST API \u2014 execution management, idempotency, queue publish",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "tsx watch src/main.ts",
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "start": "node dist/server.js",
+    "start": "node dist/main.js",
     "test": "vitest run --passWithNoTests",
     "test:unit": "vitest run --passWithNoTests",
     "test:integration": "vitest run src/api.integration.test.ts",
@@ -29,7 +29,8 @@
     "@fastify/swagger-ui": "5.2.6",
     "fastify": "5.12.5",
     "zod": "3.25.76",
-    "zod-to-json-schema": "3.25.2"
+    "zod-to-json-schema": "3.25.2",
+    "@afr/runtime": "workspace:*"
   },
   "devDependencies": {
     "@prisma/client": "6.17.1",

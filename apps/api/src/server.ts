@@ -2,6 +2,7 @@ import Fastify, { LogController, type FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import { traced, parentContext } from '@afr/observability'
 import { randomUUID } from 'node:crypto'
 import { ZodError } from 'zod'
 import { zodToJsonSchema } from 'zod-to-json-schema'
@@ -76,6 +77,27 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
     if (method === 'POST' && route.url.endsWith('/executions')) current.body = json(createSchema)
     if (method === 'POST' && route.url.endsWith('/replay')) current.body = json(replaySchema)
     route.schema = current
+    const originalHandler = route.handler
+    const action = route.url.endsWith('/replay')
+      ? 'execution.replay'
+      : route.url.endsWith('/requeue')
+        ? 'dead_letter.requeue'
+        : method === 'POST' && route.url.endsWith('/executions')
+          ? 'execution.create'
+          : 'api.handle'
+    route.handler = function (request, reply) {
+      const incoming = request.headers.traceparent
+      return traced(
+        'http.request',
+        {
+          'http.request.method': request.method,
+          'http.route': route.url,
+          'request.id': request.id,
+        },
+        () => traced(action, {}, () => Promise.resolve(originalHandler.call(this, request, reply))),
+        parentContext(typeof incoming === 'string' ? incoming : undefined),
+      )
+    }
   })
   await api.register(swagger, {
     openapi: { info: { title: 'Agent Flight Recorder API', version: '1.0.0' } },

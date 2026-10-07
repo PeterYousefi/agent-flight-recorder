@@ -62,6 +62,7 @@ export class ExecutionOrchestrator {
         availableAt: this.runtime.now(),
         message: createMessageEnvelope({
           messageId,
+          ...this.runtime.traceContext?.(),
           messageType: 'execution.process',
           executionId: id,
           schemaVersion: 1,

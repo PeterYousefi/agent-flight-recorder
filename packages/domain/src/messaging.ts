@@ -8,6 +8,7 @@ export interface MessageEnvelope<TPayload extends JsonValue = JsonObject> {
   readonly messageId: string
   readonly messageType: string
   readonly executionId: string
+  readonly traceparent?: string
   readonly correlationId?: string
   readonly causationId?: string
   readonly schemaVersion: number
@@ -51,6 +52,7 @@ export function createMessageEnvelope<TPayload extends JsonValue>(input: {
   readonly messageId: string
   readonly messageType: string
   readonly executionId: string
+  readonly traceparent?: string
   readonly correlationId?: string
   readonly causationId?: string
   readonly schemaVersion: number
@@ -60,6 +62,11 @@ export function createMessageEnvelope<TPayload extends JsonValue>(input: {
   requireIdentifier(input.messageId, 'messageId')
   requireIdentifier(input.messageType, 'messageType')
   requireIdentifier(input.executionId, 'executionId')
+  if (
+    input.traceparent !== undefined &&
+    !/^00-[a-f0-9]{32}-[a-f0-9]{16}-[a-f0-9]{2}$/.test(input.traceparent)
+  )
+    throw new InvalidContractError('Invalid W3C trace context')
   requireOptionalIdentifier(input.correlationId, 'correlationId')
   requireOptionalIdentifier(input.causationId, 'causationId')
   if (!Number.isInteger(input.schemaVersion) || input.schemaVersion <= 0) {

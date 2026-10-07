@@ -76,6 +76,7 @@ export async function recordFailure(
       availableAt,
       message: createMessageEnvelope({
         messageId: id,
+        ...runtime.traceContext?.(),
         messageType: 'execution.process',
         executionId: execution.id,
         schemaVersion: 1,

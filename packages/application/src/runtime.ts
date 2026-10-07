@@ -14,6 +14,8 @@ import {
 import { ApplicationError } from './errors.js'
 
 export interface Runtime {
+  readonly traceContext?: () => { readonly traceparent?: string }
+  readonly correlation?: () => { readonly traceId?: string; readonly spanId?: string }
   readonly now: () => Date
   readonly id: () => string
 }
@@ -66,6 +68,7 @@ export async function append<T extends ExecutionEventType>(
       sequence: history.length + 1,
       timestamp,
       payload,
+      ...(runtime.correlation === undefined ? {} : { correlation: runtime.correlation() }),
     }),
   )
 }

@@ -20,6 +20,7 @@ import {
   type MessageEnvelope,
   type ExecutionRepositories,
   type ExecutionStore,
+  type CorrelationMetadata,
 } from '@afr/domain'
 import { Prisma, type PrismaClient } from '@prisma/client'
 import { executionFromRow, attemptFromRow, eventFromRow, json } from './mapping.js'
@@ -35,8 +36,32 @@ function pagination(query: ExecutionQuery = {}): { take: number; skip: number } 
   return { take, skip }
 }
 
+export interface CommittedFact {
+  readonly event: ExecutionEvent
+  readonly elapsedSeconds: number
+}
+export interface PersistenceObserver {
+  readonly correlation?: () => CorrelationMetadata
+  readonly committed?: (facts: readonly CommittedFact[], costs: readonly CostRecord[]) => void
+}
+interface ObservationBuffer {
+  facts: CommittedFact[]
+  costs: CostRecord[]
+}
+function report(observer: PersistenceObserver, buffer: ObservationBuffer): void {
+  try {
+    observer.committed?.(buffer.facts, buffer.costs)
+  } catch {
+    /* Telemetry cannot invalidate a committed transaction. */
+  }
+}
+
 class RepositorySession implements ExecutionRepositories {
-  public constructor(protected readonly db: Prisma.TransactionClient) {}
+  public constructor(
+    protected readonly db: Prisma.TransactionClient,
+    private readonly observer: PersistenceObserver = {},
+    private readonly buffer?: ObservationBuffer,
+  ) {}
 
   public async createOutbox(record: OutboxRecord): Promise<void> {
     const message = createMessageEnvelope(record.message)
@@ -122,7 +147,10 @@ class RepositorySession implements ExecutionRepositories {
     return resultExecution
   }
   public async appendEvent(event: ExecutionEvent): Promise<void> {
-    const validated = createExecutionEvent(event)
+    const validated = createExecutionEvent({
+      ...event,
+      correlation: { ...this.observer.correlation?.(), ...event.correlation },
+    })
     const history = await this.listEvents(validated.executionId)
     validateExecutionEventStream([...history, validated])
     await this.db.executionEvent.create({
@@ -136,6 +164,15 @@ class RepositorySession implements ExecutionRepositories {
         payload: json(validated.payload),
         ...validated.correlation,
       },
+    })
+    this.buffer?.facts.push({
+      event: validated,
+      elapsedSeconds: Math.max(
+        0,
+        (Date.parse(validated.timestamp) -
+          Date.parse(history[0]?.timestamp ?? validated.timestamp)) /
+          1000,
+      ),
     })
   }
   public async listEvents(executionId: string): Promise<readonly ExecutionEvent[]> {
@@ -195,6 +232,7 @@ class RepositorySession implements ExecutionRepositories {
         )
     }
     await this.db.costRecord.create({ data: cost })
+    this.buffer?.costs.push(cost)
   }
   public async listCosts(executionId: string): Promise<readonly CostRecord[]> {
     return (
@@ -333,29 +371,42 @@ class RepositorySession implements ExecutionRepositories {
 }
 
 export class PostgresExecutionStore extends RepositorySession implements ExecutionStore {
-  public constructor(private readonly client: PrismaClient) {
+  public constructor(
+    private readonly client: PrismaClient,
+    private readonly observation: PersistenceObserver = {},
+  ) {
     super(client)
   }
   public async createExecutionIdempotently(
     execution: Execution,
   ): Promise<{ execution: Execution; created: boolean }> {
-    return createIdempotently(this.client, execution, (db) => new RepositorySession(db))
+    const buffer: ObservationBuffer = { facts: [], costs: [] }
+    const result = await createIdempotently(
+      this.client,
+      execution,
+      (db) => new RepositorySession(db, this.observation, buffer),
+    )
+    if (result.created) report(this.observation, buffer)
+    return result
   }
   public async transaction<T>(
     executionId: string,
     work: (repositories: ExecutionRepositories) => Promise<T>,
   ): Promise<T> {
+    const buffer: ObservationBuffer = { facts: [], costs: [] }
     try {
-      return await this.client.$transaction(
+      const result = await this.client.$transaction(
         async (db) => {
           const locked = await db.$queryRaw<
             Array<{ id: string }>
           >`SELECT id FROM executions WHERE id = ${executionId}::uuid FOR UPDATE`
           if (locked.length !== 1) throw new PersistenceError('NOT_FOUND', 'Execution is missing')
-          return work(new RepositorySession(db))
+          return work(new RepositorySession(db, this.observation, buffer))
         },
         { maxWait: 10000, timeout: 10000 },
       )
+      report(this.observation, buffer)
+      return result
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')
         throw new PersistenceError('CONFLICT', 'Record uniqueness conflict')

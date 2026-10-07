@@ -6,6 +6,9 @@ import {
   createExecutionRequest,
   createNonNegativeMoney,
   ExecutionStatus,
+  ExecutionEventType,
+  createExecutionEvent,
+  type ExecutionEvent,
   type ExecutionProvider,
 } from '@afr/domain'
 import { InMemoryMessageBus } from '@afr/adapters'
@@ -55,6 +58,37 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       await prisma.executionEvent.deleteMany({ where })
       await prisma.execution.deleteMany({ where: { id: { in: ids } } })
       await prisma.$disconnect()
+    })
+    it('observes only committed facts and isolates telemetry failures', async () => {
+      const seen: ExecutionEvent[] = []
+      const observed = new PostgresExecutionStore(prisma, {
+        correlation: () => ({ traceId: 'a'.repeat(32), spanId: 'b'.repeat(16) }),
+        committed: (facts) => {
+          seen.push(...facts.map((f) => f.event))
+          throw new Error('telemetry unavailable')
+        },
+      })
+      const service = new ExecutionOrchestrator(observed, new ProviderRegistry([provider]))
+      const result = await service.create(request)
+      expect(seen.map((e) => e.eventType)).toEqual(['execution.created', 'execution.queued'])
+      expect(seen[0]?.correlation?.traceId).toBe('a'.repeat(32))
+      await expect(
+        observed.transaction(result.execution.id, async (tx) => {
+          await tx.appendEvent(
+            createExecutionEvent({
+              eventId: randomUUID(),
+              executionId: result.execution.id,
+              eventType: ExecutionEventType.EXECUTION_CANCELLED,
+              sequence: 3,
+              timestamp: new Date().toISOString(),
+              payload: { reason: 'fixture' },
+            }),
+          )
+          throw new Error('rollback')
+        }),
+      ).rejects.toThrow('rollback')
+      expect(seen).toHaveLength(2)
+      expect(await store.listEvents(result.execution.id)).toHaveLength(2)
     })
     it('creates and queues an execution once under concurrent duplicate submissions', async () => {
       const idempotencyKey = randomUUID()

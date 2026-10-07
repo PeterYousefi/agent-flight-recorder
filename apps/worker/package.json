@@ -2,13 +2,13 @@
   "name": "@afr/worker",
   "version": "0.1.0",
   "private": true,
-  "description": "Async execution worker — queue consumer, state machine driver, provider invocation",
+  "description": "Async execution worker \u2014 queue consumer, state machine driver, provider invocation",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/worker.ts",
+    "dev": "tsx watch src/main.ts",
     "build": "tsc --project tsconfig.json",
     "typecheck": "tsc --project tsconfig.json --noEmit",
-    "start": "node dist/worker.js",
+    "start": "node dist/main.js",
     "test": "vitest run --passWithNoTests",
     "test:unit": "vitest run --passWithNoTests",
     "test:integration": "vitest run --config vitest.integration.config.ts",
@@ -21,7 +21,8 @@
     "@afr/domain": "workspace:*",
     "@afr/observability": "workspace:*",
     "@afr/providers": "workspace:*",
-    "@afr/application": "workspace:*"
+    "@afr/application": "workspace:*",
+    "@afr/runtime": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.29",
