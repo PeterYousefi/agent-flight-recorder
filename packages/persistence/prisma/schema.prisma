@@ -11,6 +11,7 @@ model Execution {
   id                  String    @id @default(uuid()) @db.Uuid
   agentId             String    @map("agent_id")
   provider            String
+  input               Json      @default("{}")
   operation           String
   status              String
   createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

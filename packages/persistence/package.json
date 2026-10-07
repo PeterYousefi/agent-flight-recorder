@@ -5,26 +5,35 @@
   "description": "Prisma schema and migrations for Agent Flight Recorder persistence",
   "type": "module",
   "scripts": {
-    "build": "prisma generate",
-    "typecheck": "DATABASE_URL=postgresql://localhost:5432/placeholder prisma validate",
+    "build": "prisma generate && tsc --project tsconfig.json",
+    "typecheck": "tsc --project tsconfig.json --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run",
-    "test:integration": "vitest run",
+    "test:integration": "vitest run tests",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
-    "lint": "eslint prisma tests",
-    "format": "prettier --write prisma tests package.json",
-    "format:check": "prettier --check prisma tests package.json",
+    "lint": "eslint src tests",
+    "format": "prettier --write src tests package.json",
+    "format:check": "prettier --check src tests package.json",
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:migrate:status": "prisma migrate status",
     "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
-    "@prisma/client": "6.17.1"
+    "@prisma/client": "6.17.1",
+    "@afr/domain": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "22.15.29",
     "prisma": "6.17.1",
     "vitest": "5.0.3"
+  },
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
   }
 }

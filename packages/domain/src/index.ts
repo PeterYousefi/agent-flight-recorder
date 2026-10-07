@@ -132,3 +132,13 @@ export {
   VALID_TRANSITIONS,
 } from './state-machine.js'
 export type { ExecutionStatusCategory } from './state-machine.js'
+export type {
+  ExecutionQuery,
+  CostRecord,
+  StoredArtifact,
+  ReplayRelationship,
+  DeadLetterRecord,
+  AuditRecord,
+  ExecutionRepositories,
+  ExecutionStore,
+} from './persistence.js'

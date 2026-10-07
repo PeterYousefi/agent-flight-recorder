@@ -20,6 +20,19 @@ jobs:
     name: Validate repository
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:16.9-alpine
+        env:
+          POSTGRES_USER: afr_test
+          POSTGRES_PASSWORD: local_test_only
+          POSTGRES_DB: afr_integration_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U afr_test -d afr_integration_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -39,6 +52,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Generate persistence client
+        run: pnpm --filter @afr/persistence prisma:generate
+
+      - name: Build domain interfaces
+        run: pnpm --filter @afr/domain build
+
       - name: Check formatting
         run: pnpm format:check
 
@@ -50,6 +69,18 @@ jobs:
 
       - name: Run unit tests
         run: pnpm --recursive exec vitest run --passWithNoTests
+
+      - name: Apply test database migrations
+        env:
+          DATABASE_URL: postgresql://afr_test:local_test_only@localhost:5432/afr_integration_test
+        run: pnpm --filter @afr/persistence prisma:migrate:deploy
+
+      - name: Run PostgreSQL integration tests
+        env:
+          AFR_TEST_DATABASE_URL: postgresql://afr_test:local_test_only@localhost:5432/afr_integration_test
+        run: |
+          pnpm --filter @afr/domain build
+          pnpm --filter @afr/persistence test:integration
 
       - name: Build packages
         run: pnpm build

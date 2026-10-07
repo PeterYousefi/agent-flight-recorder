@@ -134,6 +134,9 @@ importers:
 
   packages/persistence:
     dependencies:
+      '@afr/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@prisma/client':
         specifier: 6.17.1
         version: 6.17.1(prisma@6.17.1(typescript@5.9.3))(typescript@5.9.3)
