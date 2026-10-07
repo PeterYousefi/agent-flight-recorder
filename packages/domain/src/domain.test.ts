@@ -2,15 +2,22 @@ import { describe, expect, it } from 'vitest'
 
 import {
   AttemptStatus,
+  ACTIVE_STATES,
+  BLOCKED_STATES,
   DomainErrorCode,
   ExecutionStatus,
+  FAILED_STATES,
   InvalidAttemptError,
   InvalidBudgetPolicyError,
   InvalidExecutionRequestError,
   InvalidStateTransitionError,
   ReplayMode,
   VALID_TRANSITIONS,
+  INITIAL_STATES,
+  RETRY_STATES,
+  TERMINAL_STATES,
   canTransitionTo,
+  classifyStatus,
   createBudgetPolicy,
   createExecution,
   createExecutionAttempt,
@@ -38,64 +45,128 @@ const validRequest = {
 }
 
 describe('execution lifecycle', () => {
-  it('allows every explicitly permitted transition', () => {
-    for (const [from, destinations] of Object.entries(VALID_TRANSITIONS)) {
-      for (const to of destinations) {
-        expect(canTransitionTo(from as ExecutionStatus, to)).toBe(true)
-        expect(transition(from as ExecutionStatus, to)).toBe(to)
-      }
-    }
-  })
-
-  it.each([
-    [ExecutionStatus.PENDING, ExecutionStatus.RUNNING],
-    [ExecutionStatus.QUEUED, ExecutionStatus.SUCCEEDED],
-    [ExecutionStatus.RUNNING, ExecutionStatus.QUEUED],
-    [ExecutionStatus.RETRY_SCHEDULED, ExecutionStatus.RUNNING],
-    [ExecutionStatus.SUCCEEDED, ExecutionStatus.RUNNING],
-    [ExecutionStatus.FAILED, ExecutionStatus.PENDING],
-    [ExecutionStatus.CANCELLED, ExecutionStatus.QUEUED],
-    [ExecutionStatus.BUDGET_EXCEEDED, ExecutionStatus.RUNNING],
-    [ExecutionStatus.DEAD_LETTERED, ExecutionStatus.PENDING],
-  ] as const)('rejects %s -> %s', (from, to) => {
-    expect(() => transition(from, to)).toThrow(InvalidStateTransitionError)
-    expect(() => transition(from, to)).toThrow(
-      expect.objectContaining({
-        code: DomainErrorCode.INVALID_STATE_TRANSITION,
-        from,
-        to,
-      }),
-    )
-  })
-
-  it('keeps every terminal status from transitioning to an active status', () => {
-    const activeStatuses = [
-      ExecutionStatus.PENDING,
-      ExecutionStatus.QUEUED,
-      ExecutionStatus.RUNNING,
+  const expectedTransitions: Readonly<Record<ExecutionStatus, readonly ExecutionStatus[]>> = {
+    [ExecutionStatus.PENDING]: [ExecutionStatus.QUEUED, ExecutionStatus.CANCELLED],
+    [ExecutionStatus.QUEUED]: [ExecutionStatus.RUNNING, ExecutionStatus.CANCELLED],
+    [ExecutionStatus.RUNNING]: [
       ExecutionStatus.WAITING,
       ExecutionStatus.RETRY_SCHEDULED,
-    ]
-    const terminalStatuses = Object.values(ExecutionStatus).filter(isTerminal)
-
-    expect(terminalStatuses).toEqual([
       ExecutionStatus.SUCCEEDED,
       ExecutionStatus.FAILED,
       ExecutionStatus.CANCELLED,
       ExecutionStatus.BUDGET_EXCEEDED,
-      ExecutionStatus.DEAD_LETTERED,
-    ])
-    for (const terminalStatus of terminalStatuses) {
-      for (const activeStatus of activeStatuses) {
-        expect(canTransitionTo(terminalStatus, activeStatus)).toBe(false)
+    ],
+    [ExecutionStatus.WAITING]: [
+      ExecutionStatus.RUNNING,
+      ExecutionStatus.RETRY_SCHEDULED,
+      ExecutionStatus.FAILED,
+      ExecutionStatus.CANCELLED,
+      ExecutionStatus.BUDGET_EXCEEDED,
+    ],
+    [ExecutionStatus.RETRY_SCHEDULED]: [ExecutionStatus.QUEUED, ExecutionStatus.CANCELLED],
+    [ExecutionStatus.SUCCEEDED]: [],
+    [ExecutionStatus.FAILED]: [ExecutionStatus.DEAD_LETTERED],
+    [ExecutionStatus.CANCELLED]: [],
+    [ExecutionStatus.BUDGET_EXCEEDED]: [],
+    [ExecutionStatus.DEAD_LETTERED]: [],
+  }
+
+  it('matches the complete explicitly permitted transition matrix', () => {
+    expect(VALID_TRANSITIONS).toEqual(expectedTransitions)
+    for (const from of Object.values(ExecutionStatus)) {
+      for (const to of Object.values(ExecutionStatus)) {
+        const allowed = expectedTransitions[from].includes(to)
+        expect(canTransitionTo(from, to)).toBe(allowed)
+        if (allowed) {
+          expect(transition(from, to)).toBe(to)
+        }
       }
     }
   })
 
-  it('handles every status exhaustively', () => {
+  it('rejects every transition outside the matrix with source and target details', () => {
+    for (const from of Object.values(ExecutionStatus)) {
+      for (const to of Object.values(ExecutionStatus)) {
+        if (expectedTransitions[from].includes(to)) {
+          continue
+        }
+        expect(() => transition(from, to)).toThrow(InvalidStateTransitionError)
+        expect(() => transition(from, to)).toThrow(
+          expect.objectContaining({
+            code: DomainErrorCode.INVALID_STATE_TRANSITION,
+            from,
+            to,
+          }),
+        )
+      }
+    }
+  })
+
+  it('classifies every status exactly once', () => {
+    const groups = [
+      INITIAL_STATES,
+      ACTIVE_STATES,
+      BLOCKED_STATES,
+      RETRY_STATES,
+      FAILED_STATES,
+      TERMINAL_STATES,
+    ]
+    const classifiedStatuses = groups.flat()
+
+    expect(classifiedStatuses).toHaveLength(Object.values(ExecutionStatus).length)
+    expect(new Set(classifiedStatuses).size).toBe(classifiedStatuses.length)
     for (const status of Object.values(ExecutionStatus)) {
+      expect(classifiedStatuses).toContain(status)
+      expect(classifyStatus(status)).toBeTypeOf('string')
+    }
+    expect(FAILED_STATES).toEqual([ExecutionStatus.FAILED])
+  })
+
+  it('allows cancellation from every non-terminal state and nowhere else', () => {
+    for (const status of Object.values(ExecutionStatus)) {
+      if (isTerminal(status) || status === ExecutionStatus.FAILED) {
+        expect(canTransitionTo(status, ExecutionStatus.CANCELLED)).toBe(false)
+      } else {
+        expect(transition(status, ExecutionStatus.CANCELLED)).toBe(ExecutionStatus.CANCELLED)
+      }
+    }
+  })
+
+  it('supports waiting resume and retry paths without self-transitions', () => {
+    expect(transition(ExecutionStatus.WAITING, ExecutionStatus.RUNNING)).toBe(
+      ExecutionStatus.RUNNING,
+    )
+    expect(transition(ExecutionStatus.WAITING, ExecutionStatus.RETRY_SCHEDULED)).toBe(
+      ExecutionStatus.RETRY_SCHEDULED,
+    )
+    expect(transition(ExecutionStatus.RETRY_SCHEDULED, ExecutionStatus.QUEUED)).toBe(
+      ExecutionStatus.QUEUED,
+    )
+    for (const status of Object.values(ExecutionStatus)) {
+      expect(canTransitionTo(status, status)).toBe(false)
       expect(statusLabel(status)).toBeTypeOf('string')
-      expect(VALID_TRANSITIONS[status]).toBeDefined()
+    }
+  })
+
+  it('preserves terminal-state invariants across every bounded valid path', () => {
+    const visit = (status: ExecutionStatus, depth: number): void => {
+      if (isTerminal(status)) {
+        for (const next of Object.values(ExecutionStatus)) {
+          expect(canTransitionTo(status, next)).toBe(false)
+        }
+        return
+      }
+      if (depth === 0) {
+        return
+      }
+      for (const next of VALID_TRANSITIONS[status]) {
+        expect(transition(status, next)).toBe(next)
+        visit(next, depth - 1)
+      }
+    }
+
+    for (const initialStatus of INITIAL_STATES) {
+      visit(initialStatus, 8)
     }
   })
 })

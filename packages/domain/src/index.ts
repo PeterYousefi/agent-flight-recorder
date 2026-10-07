@@ -25,9 +25,17 @@ export {
   InvalidStateTransitionError,
 } from './errors.js'
 export {
+  ACTIVE_STATES,
+  BLOCKED_STATES,
   canTransitionTo,
+  classifyStatus,
+  FAILED_STATES,
+  INITIAL_STATES,
   isTerminal,
+  RETRY_STATES,
   statusLabel,
+  TERMINAL_STATES,
   transition,
   VALID_TRANSITIONS,
 } from './state-machine.js'
+export type { ExecutionStatusCategory } from './state-machine.js'
