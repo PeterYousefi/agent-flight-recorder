@@ -134,6 +134,8 @@ export {
 export type { ExecutionStatusCategory } from './state-machine.js'
 export type {
   ExecutionQuery,
+  ExecutionSummary,
+  ExecutionOverview,
   CostRecord,
   StoredArtifact,
   ReplayRelationship,

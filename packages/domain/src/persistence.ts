@@ -58,7 +58,32 @@ export interface OutboxRecord {
   readonly message: MessageEnvelope
   readonly availableAt: Date
 }
+export interface ExecutionSummary {
+  readonly executionId: string
+  readonly attemptCount: number
+  readonly estimatedMicroUsd: bigint | null
+  readonly measuredMicroUsd: bigint | null
+}
+export interface ExecutionOverview {
+  readonly total: number
+  readonly succeeded: number
+  readonly failed: number
+  readonly cancelled: number
+  readonly budgetExceeded: number
+  readonly deadLetters: number
+  readonly retries: number
+  readonly replays: number
+  readonly toolCalls: number
+  readonly pendingOutbox: number
+  readonly p50Seconds: number | null
+  readonly p95Seconds: number | null
+  readonly estimatedMicroUsd: bigint | null
+  readonly measuredMicroUsd: bigint | null
+  readonly hourly: readonly { hour: string; created: number; succeeded: number; failed: number }[]
+}
 export interface ExecutionRepositories {
+  getExecutionSummaries(ids: readonly string[]): Promise<readonly ExecutionSummary[]>
+  getOverview(): Promise<ExecutionOverview>
   createOutbox(record: OutboxRecord): Promise<void>
   listPendingOutbox(now: Date, limit?: number): Promise<readonly OutboxRecord[]>
   markOutboxPublished(id: string, now: Date): Promise<void>

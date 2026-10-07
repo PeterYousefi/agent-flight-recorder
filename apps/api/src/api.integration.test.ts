@@ -91,6 +91,20 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       expect((await api.inject(`/api/v1/executions/${id}/cost`)).json().measured_micro_usd).toBe(
         '4000',
       )
+      const summary = (await api.inject('/api/v1/executions?limit=100'))
+        .json()
+        .items.find((item: { id: string }) => item.id === id).summary
+      expect(summary).toEqual({
+        execution_id: id,
+        attempt_count: 1,
+        estimated_micro_usd: '5000',
+        measured_micro_usd: '4000',
+      })
+      const overview = await api.inject('/api/v1/overview')
+      expect(overview.statusCode).toBe(200)
+      expect(overview.json().succeeded).toBeGreaterThanOrEqual(1)
+      expect(overview.json().p50_seconds).toBeGreaterThanOrEqual(0)
+      expect(overview.json().hourly.length).toBeGreaterThanOrEqual(1)
       const artifactId = (await api.inject(`/api/v1/executions/${id}/artifacts`)).json().items[0].id
       expect(
         (await api.inject(`/api/v1/executions/${id}/artifacts/${artifactId}`)).json().content,

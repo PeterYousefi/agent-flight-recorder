@@ -44,8 +44,8 @@ export default [
     // Ignore patterns
     ignores: [
       'node_modules/**',
-      'apps/lovable-ui/**',
       '**/dist/**',
+      '**/routeTree.gen.ts',
       'build/**',
       '.next/**',
       'coverage/**',

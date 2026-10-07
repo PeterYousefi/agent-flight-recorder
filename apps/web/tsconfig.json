@@ -9,8 +9,12 @@
     "rootDir": "src",
     "outDir": "dist",
     "tsBuildInfoFile": "tsconfig.tsbuildinfo",
-    "composite": false
+    "composite": false,
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": ["vite/client"]
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
+  "exclude": ["node_modules", "dist"]
 }

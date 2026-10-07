@@ -180,8 +180,12 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
       offset: query.offset,
       ...(query.status === undefined ? {} : { status: query.status }),
     })
+    const summaries = await deps.store.getExecutionSummaries(items.map((e) => e.id))
     return {
-      items: items.map(executionDto),
+      items: items.map((e) => ({
+        ...executionDto(e),
+        summary: snake(summaries.find((s) => s.executionId === e.id)),
+      })),
       next_offset: items.length === query.limit ? query.offset + query.limit : null,
     }
   })
@@ -353,6 +357,11 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
         synthetic_costs: true,
       }
     },
+  )
+  api.get(
+    '/api/v1/overview',
+    { schema: { summary: 'Authoritative persisted execution aggregates' } },
+    async () => snake(await deps.store.getOverview()),
   )
   api.get('/api/v1/health', { schema: { summary: 'Liveness' } }, async () => ({ status: 'ok' }))
   api.get('/api/v1/ready', { schema: { summary: 'Dependency readiness' } }, async (_req, reply) => {

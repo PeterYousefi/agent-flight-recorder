@@ -10,6 +10,8 @@ import {
   type ExecutionEvent,
   type ExecutionAttempt,
   type ExecutionQuery,
+  type ExecutionSummary,
+  type ExecutionOverview,
   type CostRecord,
   type StoredArtifact,
   type ReplayRelationship,
@@ -25,6 +27,7 @@ import {
 import { Prisma, type PrismaClient } from '@prisma/client'
 import { executionFromRow, attemptFromRow, eventFromRow, json } from './mapping.js'
 import { PersistenceError } from './errors.js'
+import { readSummaries, readOverview } from './read-models.js'
 import { createIdempotently } from './idempotency.js'
 
 function pagination(query: ExecutionQuery = {}): { take: number; skip: number } {
@@ -63,6 +66,12 @@ class RepositorySession implements ExecutionRepositories {
     private readonly buffer?: ObservationBuffer,
   ) {}
 
+  public async getExecutionSummaries(ids: readonly string[]): Promise<readonly ExecutionSummary[]> {
+    return readSummaries(this.db, ids)
+  }
+  public async getOverview(): Promise<ExecutionOverview> {
+    return readOverview(this.db)
+  }
   public async createOutbox(record: OutboxRecord): Promise<void> {
     const message = createMessageEnvelope(record.message)
     if (message.messageId !== record.id || message.executionId !== record.executionId)
