@@ -81,3 +81,8 @@ jobs:
         run: |
           pnpm --filter @afr/domain build
           pnpm --filter @afr/persistence test:integration
+
+      - name: Run API integration tests
+        env:
+          AFR_TEST_DATABASE_URL: postgresql://afr_test:local_test_only@localhost:5432/afr_integration_test
+        run: pnpm --filter @afr/api test:integration

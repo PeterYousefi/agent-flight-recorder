@@ -2,6 +2,7 @@ import {
   createExecution,
   createExecutionRequest,
   createMessageEnvelope,
+  canTransitionTo,
   ExecutionStatus,
   ExecutionEventType,
   type Execution,
@@ -87,6 +88,8 @@ export class ExecutionOrchestrator {
       const execution = await tx.getExecution(id)
       if (execution === undefined) throw new ApplicationError('NOT_FOUND', 'Execution is missing')
       if (execution.status === ExecutionStatus.CANCELLED) return execution
+      if (!canTransitionTo(execution.status, ExecutionStatus.CANCELLED))
+        throw new ApplicationError('CONFLICT', 'Execution is already terminal')
       await append(
         tx,
         id,

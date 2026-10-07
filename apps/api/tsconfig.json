@@ -9,7 +9,14 @@
       "@afr/observability": ["../../packages/observability/src/index.ts"]
     }
   },
-  "references": [{ "path": "../../packages/domain" }, { "path": "../../packages/observability" }],
+  "references": [
+    {
+      "path": "../../packages/domain"
+    },
+    {
+      "path": "../../packages/observability"
+    }
+  ],
   "include": ["src/**/*.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.integration.test.ts"]
+  "exclude": ["node_modules", "dist"]
 }
