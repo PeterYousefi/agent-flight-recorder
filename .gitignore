@@ -12,10 +12,18 @@ out/
 
 # Environment — NEVER commit real .env files
 .env
+.env.*
+!.env.example
 .env.local
-.env.*.local
-.env.development
-.env.production
+
+# Local databases and Docker state
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+docker-compose.override.yml
+.docker/
 
 # Secrets — belt and suspenders
 *.pem
@@ -28,6 +36,8 @@ out/
 *.der
 id_rsa
 id_ed25519
+*.token
+*.credentials
 secrets/
 
 # Prisma
@@ -67,10 +77,18 @@ Thumbs.db
 *~
 
 # Docker volumes (if mounted locally)
-.docker/
+docker-data/
+docker-volumes/
 
 # Benchmark results (generated)
 benchmark-results/
+
+# Tool caches and local reports
+.cache/
+.eslintcache
+.vite/
+.turbo/
+.nyc_output/
 
 # pnpm
 .pnpm-store/
