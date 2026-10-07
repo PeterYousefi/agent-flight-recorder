@@ -5,6 +5,10 @@ export enum DomainErrorCode {
   INVALID_EXECUTION_REQUEST = 'INVALID_EXECUTION_REQUEST',
   INVALID_BUDGET_POLICY = 'INVALID_BUDGET_POLICY',
   INVALID_ATTEMPT = 'INVALID_ATTEMPT',
+  INVALID_EVENT = 'INVALID_EVENT',
+  UNSUPPORTED_EVENT_SCHEMA = 'UNSUPPORTED_EVENT_SCHEMA',
+  INVALID_EVENT_SEQUENCE = 'INVALID_EVENT_SEQUENCE',
+  INVALID_EVENT_STREAM = 'INVALID_EVENT_STREAM',
 }
 
 export abstract class DomainError extends Error {
@@ -49,6 +53,36 @@ export class InvalidAttemptError extends DomainError {
   }
 }
 
+export class InvalidEventError extends DomainError {
+  public constructor(message: string) {
+    super(DomainErrorCode.INVALID_EVENT, message)
+  }
+}
+
+export class UnsupportedEventSchemaError extends DomainError {
+  public readonly schemaVersion: number
+
+  public constructor(schemaVersion: number) {
+    super(
+      DomainErrorCode.UNSUPPORTED_EVENT_SCHEMA,
+      `Unsupported event schema version ${schemaVersion}`,
+    )
+    this.schemaVersion = schemaVersion
+  }
+}
+
+export class InvalidEventSequenceError extends DomainError {
+  public constructor(message: string) {
+    super(DomainErrorCode.INVALID_EVENT_SEQUENCE, message)
+  }
+}
+
+export class InvalidEventStreamError extends DomainError {
+  public constructor(message: string) {
+    super(DomainErrorCode.INVALID_EVENT_STREAM, message)
+  }
+}
+
 export function domainErrorCodeLabel(code: DomainErrorCode): string {
   switch (code) {
     case DomainErrorCode.INVALID_STATE_TRANSITION:
@@ -59,6 +93,14 @@ export function domainErrorCodeLabel(code: DomainErrorCode): string {
       return 'Invalid budget policy'
     case DomainErrorCode.INVALID_ATTEMPT:
       return 'Invalid attempt'
+    case DomainErrorCode.INVALID_EVENT:
+      return 'Invalid event'
+    case DomainErrorCode.UNSUPPORTED_EVENT_SCHEMA:
+      return 'Unsupported event schema'
+    case DomainErrorCode.INVALID_EVENT_SEQUENCE:
+      return 'Invalid event sequence'
+    case DomainErrorCode.INVALID_EVENT_STREAM:
+      return 'Invalid event stream'
     default:
       return assertNever(code)
   }
