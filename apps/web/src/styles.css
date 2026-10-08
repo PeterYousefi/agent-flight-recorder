@@ -219,3 +219,19 @@ button:disabled {
     transition: none !important;
   }
 }
+
+[cmdk-overlay] {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--background) 75%, transparent);
+  backdrop-filter: blur(4px);
+}
+[cmdk-dialog] {
+  position: fixed;
+  top: 18vh;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 51;
+  width: min(32rem, calc(100% - 2rem));
+}

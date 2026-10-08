@@ -22,6 +22,16 @@ function DeadLetterPage(): JSX.Element {
       await navigate({ to: '/executions/$id', params: { id: e.id } })
     },
   })
+  const replay = useMutation({
+    mutationFn: (id: string) =>
+      request<ExecutionDto>(`/executions/${id}/replay`, {
+        method: 'POST',
+        body: { mode: 'simulation', carry_budget: true },
+      }),
+    onSuccess: async (execution) => {
+      await navigate({ to: '/executions/$id', params: { id: execution.id } })
+    },
+  })
   if (query.isPending) return <Loading />
   if (query.isError)
     return (
@@ -48,6 +58,7 @@ function DeadLetterPage(): JSX.Element {
         </p>
       </div>
       {requeue.isError && <ErrorState error={requeue.error} />}
+      {replay.isError && <ErrorState error={replay.error} />}
       <div className="panel overflow-x-auto">
         <table className="w-full text-left text-[13px]">
           <thead>
@@ -61,7 +72,11 @@ function DeadLetterPage(): JSX.Element {
           </thead>
           <tbody>
             {query.data.items.map((d) => (
-              <tr key={d.id} className="border-b border-border/50 last:border-0 hover:bg-accent/40">
+              <tr
+                data-testid={`dead-letter-${d.execution_id}`}
+                key={d.id}
+                className="border-b border-border/50 last:border-0 hover:bg-accent/40"
+              >
                 <td className="px-3 py-3">
                   <Link
                     to="/executions/$id"
@@ -77,6 +92,13 @@ function DeadLetterPage(): JSX.Element {
                   {fmtTime(d.dead_lettered_at)}
                 </td>
                 <td className="px-3 py-3">
+                  <button
+                    className="btn-secondary mr-2"
+                    disabled={replay.isPending}
+                    onClick={() => replay.mutate(d.execution_id)}
+                  >
+                    Replay simulation
+                  </button>
                   {d.requeued_execution_id ? (
                     <Link
                       to="/executions/$id"

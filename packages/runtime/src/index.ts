@@ -33,6 +33,7 @@ export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
   bus: ReturnType<typeof observeBus>
   dispatcher: OutboxDispatcher
   processor: ExecutionProcessor
+  operationalStatus: () => Promise<Record<string, unknown>>
   ready: () => Promise<boolean>
   close: () => Promise<void>
 }> {
@@ -55,9 +56,10 @@ export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
     await storage.initialize()
     const bus = observeBus(transport)
     const artifacts = observeArtifacts(storage)
+    const sapiom = new SapiomProvider()
     const providers = new ProviderRegistry([
       observeProvider(new MockProvider()),
-      observeProvider(new SapiomProvider()),
+      observeProvider(sapiom),
     ])
     const runtime = { now: () => new Date(), id: randomUUID, correlation, traceContext }
     const orchestrator = new ExecutionOrchestrator(database.store, providers, runtime)
@@ -71,6 +73,46 @@ export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
       bus,
       dispatcher: new OutboxDispatcher(database.store, bus, runtime),
       processor: new ExecutionProcessor(database.store, providers, artifacts, runtime),
+      operationalStatus: async () => {
+        const probe = async (url: string): Promise<boolean> => {
+          try {
+            return (await fetch(url, { signal: AbortSignal.timeout(2000), redirect: 'error' })).ok
+          } catch {
+            return false
+          }
+        }
+        const safe = async (work: () => Promise<boolean>): Promise<string> =>
+          (await work().catch(() => false)) ? 'ready' : 'unavailable'
+        const [postgres, serviceBus, azurite, tempo, prometheus, grafana] = await Promise.all([
+          safe(() => database.healthCheck()),
+          safe(() => transport.healthCheck()),
+          safe(() => storage.healthCheck()),
+          safe(() => probe('http://localhost:3200/ready')),
+          safe(() => probe('http://localhost:9090/-/ready')),
+          safe(() => probe('http://localhost:3001/api/health')),
+        ])
+        return {
+          providers: [
+            {
+              name: 'mock',
+              configured: true,
+              status: 'healthy',
+              costs: 'synthetic',
+              capabilities: new MockProvider().capabilities,
+            },
+            {
+              name: 'sapiom',
+              configured: sapiom.configured,
+              status: sapiom.configured ? 'configured_not_probed' : 'not_configured',
+              capabilities: sapiom.capabilities,
+            },
+          ],
+          infrastructure: { postgres, serviceBus, azurite, tempo, prometheus, grafana },
+          workerConcurrency: config.concurrency,
+          queueDepth: null,
+          queueDepthReason: 'Service Bus emulator SDK counter unavailable',
+        }
+      },
       ready: async () =>
         (
           await Promise.all([

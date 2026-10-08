@@ -53,6 +53,13 @@ function CommandPalette({
     return () => document.removeEventListener('keydown', down)
   }, [open, onOpenChange])
 
+  useEffect(() => {
+    if (!open) return
+    return () => {
+      requestAnimationFrame(() => document.getElementById('console-search')?.focus())
+    }
+  }, [open])
+
   if (!open) return null
 
   const go = (to: string, params?: Record<string, string>): void => {
@@ -65,7 +72,9 @@ function CommandPalette({
       className="fixed inset-0 z-50 flex items-start justify-center bg-background/70 pt-[18vh] backdrop-blur-sm"
       onClick={() => onOpenChange(false)}
     >
-      <Command
+      <Command.Dialog
+        open={open}
+        onOpenChange={onOpenChange}
         className="w-full max-w-lg overflow-hidden rounded-md border border-border bg-popover shadow-2xl"
         onClick={(e) => e.stopPropagation()}
         label="Command palette"
@@ -74,7 +83,7 @@ function CommandPalette({
           <Search className="size-3.5 text-muted-foreground" />
           <Command.Input
             autoFocus
-            placeholder="Search executions, pages, actions…"
+            placeholder="Search recent executions or pages…"
             className="h-10 w-full bg-transparent font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground"
           />
           <kbd className="rounded-sm border border-border bg-muted px-1 py-0.5 font-mono text-[10px] text-muted-foreground">
@@ -127,7 +136,7 @@ function CommandPalette({
             ))}
           </Command.Group>
         </Command.List>
-      </Command>
+      </Command.Dialog>
     </div>
   )
 }
@@ -164,6 +173,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
               <Link
                 key={item.to}
                 to={item.to}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-[13px] transition-colors',
                   active
@@ -197,7 +207,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
                 )}
               />
               <span className={allOperational ? 'text-success' : 'text-warning'}>
-                {allOperational ? 'All systems go' : 'Unavailable'}
+                {allOperational ? 'Dependencies ready' : 'Unavailable'}
               </span>
             </span>
           </div>
@@ -209,6 +219,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
         {/* Topbar */}
         <header className="sticky top-0 z-30 flex h-12 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur">
           <button
+            id="console-search"
             onClick={() => setPaletteOpen(true)}
             className="flex h-7 w-full max-w-sm items-center gap-2 rounded-sm border border-input bg-card px-2.5 text-xs text-muted-foreground transition-colors hover:border-ring/50 hover:text-foreground"
           >
@@ -255,6 +266,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
               <Link
                 key={item.to}
                 to={item.to}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
                   'flex shrink-0 items-center gap-1.5 rounded-sm px-2.5 py-1 text-xs',
                   active

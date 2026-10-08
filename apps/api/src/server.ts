@@ -31,6 +31,7 @@ import {
   executionDto,
   requestDto,
   snake,
+  defaults,
 } from './contracts.js'
 
 export interface ApiDependencies {
@@ -40,6 +41,7 @@ export interface ApiDependencies {
   readonly replay: ReplayService
   readonly artifacts: ArtifactStore
   readonly ready: () => Promise<boolean>
+  readonly operationalStatus?: () => Promise<Record<string, unknown>>
 }
 export async function createApi(deps: ApiDependencies): Promise<FastifyInstance> {
   const api = Fastify({
@@ -362,6 +364,24 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
     '/api/v1/overview',
     { schema: { summary: 'Authoritative persisted execution aggregates' } },
     async () => snake(await deps.store.getOverview()),
+  )
+  api.get(
+    '/api/v1/settings',
+    { schema: { summary: 'Safe provider and local infrastructure status; no credentials' } },
+    async () => ({
+      budget_defaults: defaults,
+      azure_deployment_enabled: false,
+      mode: 'local',
+      ...(deps.operationalStatus === undefined
+        ? {
+            providers: [
+              { name: 'mock', configured: true, status: 'healthy' },
+              { name: 'sapiom', configured: false, status: 'not_configured' },
+            ],
+            infrastructure: { dependencies: (await deps.ready()) ? 'ready' : 'unavailable' },
+          }
+        : (snake(await deps.operationalStatus()) as object)),
+    }),
   )
   api.get('/api/v1/health', { schema: { summary: 'Liveness' } }, async () => ({ status: 'ok' }))
   api.get('/api/v1/ready', { schema: { summary: 'Dependency readiness' } }, async (_req, reply) => {

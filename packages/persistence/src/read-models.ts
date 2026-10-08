@@ -44,7 +44,7 @@ export async function readOverview(db: Prisma.TransactionClient): Promise<Execut
       >`SELECT percentile_cont(0.50) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM updated_at - created_at)) AS p50, percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM updated_at - created_at)) AS p95 FROM executions WHERE status IN ('SUCCEEDED','CANCELLED','DEAD_LETTERED','BUDGET_EXCEEDED')`,
       db.$queryRaw<
         Array<{ hour: Date; created: bigint; succeeded: bigint; failed: bigint }>
-      >`SELECT date_trunc('hour', created_at) AS hour, COUNT(*) AS created, COUNT(*) FILTER (WHERE status = 'SUCCEEDED') AS succeeded, COUNT(*) FILTER (WHERE status IN ('FAILED','DEAD_LETTERED','BUDGET_EXCEEDED')) AS failed FROM executions WHERE created_at >= NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1`,
+      >`SELECT h.hour, COUNT(e.id) AS created, COUNT(e.id) FILTER (WHERE e.status = 'SUCCEEDED') AS succeeded, COUNT(e.id) FILTER (WHERE e.status IN ('FAILED','DEAD_LETTERED','BUDGET_EXCEEDED')) AS failed FROM generate_series(date_trunc('hour', NOW() - INTERVAL '24 hours'), date_trunc('hour', NOW()), INTERVAL '1 hour') AS h(hour) LEFT JOIN executions e ON e.created_at >= h.hour AND e.created_at < h.hour + INTERVAL '1 hour' AND e.created_at >= NOW() - INTERVAL '24 hours' GROUP BY 1 ORDER BY 1`,
     ])
   const count = (status: string): number =>
     statuses.find((s) => s.status === status)?._count._all ?? 0

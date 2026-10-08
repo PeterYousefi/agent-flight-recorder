@@ -40,6 +40,16 @@ function ObservabilityPage(): JSX.Element {
           label="P95 latency"
           value={fmtDuration(s.p95_seconds === null ? null : s.p95_seconds * 1000)}
         />
+        <MetricCard
+          label="Throughput (24h avg)"
+          value={`${(s.hourly.reduce((sum, h) => sum + h.created, 0) / 24).toFixed(1)}/h`}
+          hint="Persisted execution creations"
+        />
+        <MetricCard
+          label="Errors"
+          value={String(s.failed)}
+          hint="Historical failed/budget/dead-letter executions"
+        />
         <MetricCard label="Retries" value={String(s.retries)} />
         <MetricCard label="Tool/provider calls" value={String(s.tool_calls)} />
         <MetricCard
