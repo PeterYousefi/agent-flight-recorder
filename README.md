@@ -12,6 +12,8 @@ This is a working local control plane with a deterministic demo provider and an 
 
 ## Run the complete demo
 
+For a short project walkthrough, use the [three-minute Gamma presentation pack](docs/presentation/README.md): a five-slide prompt, per-slide narration and downloadable application screenshots.
+
 Prerequisites: Node.js 22+, pnpm 9.15.9 and running Docker Desktop/Compose. Allow Docker enough memory for PostgreSQL, the Service Bus emulator's SQL sidecar and the observability stack. Apple Silicon runs the emulator's SQL sidecar under amd64 emulation.
 
 ```sh
