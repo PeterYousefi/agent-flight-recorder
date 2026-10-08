@@ -126,7 +126,7 @@ interface ExecutionProvider {
 Implementations:
 
 - `MockProvider` — deterministic, supports failure injection scenarios
-- `SapiomProvider` — wraps `@sapiom/tools` `createClient()`. Requires `SAPIOM_API_KEY`. Falls back to mock mode when key is absent.
+- `SapiomProvider` — implements the verified HTTPS Router chat-completions contract with Bearer `SAPIOM_API_KEY`. Default disabled; explicit unavailable Sapiom requests fail. See `docs/integrations/sapiom.md`.
 
 ## Cloud/Local Separation
 

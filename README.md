@@ -1,267 +1,121 @@
 # Agent Flight Recorder
 
-**A local-first execution control plane for observable, replayable, cost-aware AI agent workloads.**
+**Observable, replayable, cost-aware AI agent infrastructure.**
 
-[![CI](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/ci.yml/badge.svg)](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/ci.yml/badge.svg)](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/ci.yml) [![Security](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/security.yml/badge.svg)](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/security.yml) [![Local acceptance](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/local-acceptance.yml/badge.svg)](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/local-acceptance.yml) [Apache 2.0](LICENSE)
 
----
+![Flight Recorder: a real retried execution with immutable event history](docs/screenshots/flight-recorder.png)
 
-## Why This Exists
+An asynchronous agent invocation can fail after being queued, consume money before timing out, or execute again after a worker crashes. AFR records the decisions and results needed to investigate that work: durable state, ordered events, attempts, cost records, private artifacts and a trace across the queue boundary.
 
-AI agent frameworks are good at defining and running agent logic. What they typically don't expose as a composable layer is:
+This is a working local control plane with a deterministic demo provider and an optional, narrowly scoped Sapiom Router adapter. The console reads real PostgreSQL projections. Synthetic demo costs are labelled; unavailable external prices and queue depth remain unavailable.
 
-- durable execution state with inspectable history
-- structured event capture across async boundaries
-- per-execution cost budgets with enforcement
-- retry policies with idempotency guarantees
-- dead-letter handling for permanently failed executions
-- deterministic replay for incident investigation
-- OpenTelemetry traces spanning agent → tool → result
-- a dashboard showing operational health across all executions
+## Run the complete demo
 
-Agent Flight Recorder provides exactly this control and observability layer. It wraps execution — including Sapiom tool calls via `@sapiom/tools` — with the production infrastructure primitives that let you understand, operate, and debug agentic workloads.
+Prerequisites: Node.js 22+, pnpm 9.15.9 and running Docker Desktop/Compose. Allow Docker enough memory for PostgreSQL, the Service Bus emulator's SQL sidecar and the observability stack. Apple Silicon runs the emulator's SQL sidecar under amd64 emulation.
 
-The name is deliberate. Like an aircraft flight recorder, this system captures everything: every state transition, every tool call, every retry decision, every cost event. When something goes wrong, you can inspect it. When you want to understand what happened, you can replay it.
+```sh
+git clone https://github.com/PeterYousefi/agent-flight-recorder.git
+cd agent-flight-recorder
+pnpm install --frozen-lockfile
+pnpm demo
+```
 
----
+Open [the console](http://localhost:5173), select **Demo Lab → Transient Failure**, and watch attempt one fail and attempt two succeed. Switch **Timeline → Graph**, select a node, inspect **Artifacts**, then open **Trace**. Try **Replay**: it creates a linked execution while preserving the original history. Try **Dead Letter** and **Requeue** to inspect the same invariant for exhausted work.
+
+`pnpm demo` starts Docker services, builds the workspace, applies committed migrations and starts API, worker and frontend. It explicitly disables Sapiom and removes its key from child processes. No `.env` or cloud account is required. Warm startup is a few minutes; first image downloads and platform emulation can take longer. Ctrl+C stops the launcher's processes; containers and persistent data remain available. `docker compose --profile observability down` stops containers without deleting volumes.
+
+API: [localhost:3000/api/docs](http://localhost:3000/api/docs). Grafana: [localhost:3001](http://localhost:3001), local-only `admin` / `admin`. Prometheus: [localhost:9090](http://localhost:9090). The application API and all container ports bind to loopback.
+
+**Actual Azure resources deployed: none**
+
+**Azure cost for local development/demo: $0**
 
 ## Architecture
 
-```
-React Dashboard (ops UI)
-        │
-Fastify REST API (:3000)
-        │
-   ┌────┴────┐
-   │         │
-PostgreSQL  Service Bus Queue (Azure Service Bus Emulator)
-   │         │
-   └────┬────┘
-        │
-Execution Worker
-        │
-ExecutionProvider
-   ├── MockProvider (default, no credentials needed)
-   └── SapiomProvider (@sapiom/tools, optional)
-        │
-Azurite (artifact storage)
-
-All services → OTel Collector → Prometheus + Tempo → Grafana (:3000)
+```mermaid
+flowchart LR
+  UI[React operations console] --> API[Fastify API]
+  API --> DB[(PostgreSQL snapshots / facts / transactional outbox)]
+  DB --> Dispatch[Outbox dispatcher]
+  Dispatch --> Queue[Local Service Bus emulator]
+  Queue --> Worker[Execution worker]
+  Worker --> DB
+  Worker --> Provider[Mock / optional Sapiom Router]
+  Worker --> Blob[Private Azurite artifacts]
+  API --> OTel[OpenTelemetry Collector]
+  Worker --> OTel
+  OTel --> Prom[Prometheus]
+  OTel --> Tempo[Tempo]
+  Prom --> Grafana[Grafana]
+  Tempo --> Grafana
 ```
 
-Full architecture diagrams: [docs/architecture.md](docs/architecture.md)
+TypeScript/pnpm monorepo: `apps/web` uses React, Vite, TanStack Router/Query and the migrated Lovable design. `apps/api` and `apps/worker` share application services and validated runtime wiring. `packages/domain` has no I/O; infrastructure adapters implement its ports. Prisma migrations and repositories stay in `packages/persistence`. The former Lovable export was removed after the migration passed browser and build checks.
 
----
+## What is implemented
 
-## Capabilities
+| Capability               | Behavior                                                                                                                                                     |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Durable creation         | Canonical request fingerprint plus database uniqueness prevents concurrent duplicate creation; conflicting reuse returns an error.                           |
+| At-least-once processing | Transactional outbox and fenced attempt leases protect local history from duplicate delivery and stale results. External effects can still repeat.           |
+| Retries                  | Bounded exponential backoff with jitter, provider retry hints, deadlines and persisted attempt history.                                                      |
+| Dead letters             | Terminal failure facts and historical records; requeue creates a new linked execution.                                                                       |
+| Replay                   | Input replay retains provider/input; simulation replay forces MockProvider. Both create new history and an audit relationship.                               |
+| Cancellation             | Durable terminal state, provider abort signal and rejection of late state transitions; remote cancellation is best effort.                                   |
+| Budgets                  | Exact integer micro-dollar accounting, estimated-cost admission, warnings and duration/attempt/tool-call limits. Unknown external prices are never invented. |
+| Artifacts                | Private blobs, opaque keys, owner validation, checksum verification and a 1 MiB size limit.                                                                  |
+| Observability            | HTTP → outbox/queue → worker → provider/artifact trace propagation, committed-result metrics and sanitized structured logging.                               |
+| Operations console       | Overview, executions, immutable dead letters, ten Demo Lab scenarios, observability and safe configuration status. Keyboard navigation and mobile layout.    |
 
-| Feature                  | Description                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------- |
-| **Execution lifecycle**  | PENDING → QUEUED → RUNNING → SUCCEEDED/FAILED/CANCELLED/BUDGET_EXCEEDED/DEAD_LETTERED |
-| **Event log**            | Immutable, ordered event record for every execution                                   |
-| **Retries**              | Exponential backoff with jitter, configurable per execution                           |
-| **Idempotency**          | Duplicate submissions with the same key return the original execution                 |
-| **Dead-letter handling** | Inspect permanently failed executions and requeue them                                |
-| **Cancellation**         | Cancel a running or queued execution via API                                          |
-| **Cost governance**      | Budget policies with pre-execution cost estimates and enforcement                     |
-| **Replay**               | Re-run with original inputs (input mode) or against mocks (simulation mode)           |
-| **Failure injection**    | MockProvider with deterministic failure scenarios for demo                            |
-| **Artifact storage**     | Large payloads stored in Azurite (Azure Blob compatible)                              |
-| **OTel tracing**         | Distributed traces spanning HTTP → queue → worker → provider                          |
-| **Metrics**              | 11 Prometheus metrics, pre-provisioned Grafana dashboards                             |
-| **Sapiom integration**   | Optional `@sapiom/tools` integration; falls back to MockProvider                      |
+![Graph built from actual execution facts](docs/screenshots/execution-graph.png)
 
----
+## Sapiom integration
 
-## $0 Azure Cost for Local Development
+The [verified integration](docs/integrations/sapiom.md) uses `POST https://router.sapiom.ai/v1/chat/completions` with Bearer authentication from `SAPIOM_API_KEY`, non-streaming requests and `x-sapiom-lane: run_now`. `SAPIOM_ENABLED=false` is the default. Explicit Sapiom requests fail if unavailable; they never silently turn into mock work.
 
-The entire stack runs locally via Docker. No Azure subscription, no Azure credentials, no Azure cost.
+Normal tests inject mocked HTTP. The separate live test requires `RUN_SAPIOM_INTEGRATION_TESTS=true`, `SAPIOM_ENABLED=true`, a key and a model. **No live Sapiom test was run for this release.** This adapter does not implement the broader capability SDK or invent per-call prices, remote cancellation, or external idempotency guarantees.
 
-| Cloud service                 | Local equivalent                                       |
-| ----------------------------- | ------------------------------------------------------ |
-| Azure Service Bus             | Official Microsoft Service Bus emulator (Docker)       |
-| Azure Blob Storage            | Azurite (Docker)                                       |
-| Azure Monitor                 | OTel Collector + Prometheus + Grafana + Tempo (Docker) |
-| Azure Database for PostgreSQL | PostgreSQL 16 (Docker)                                 |
-| Azure Key Vault               | `.env` file                                            |
+## Validation and security
 
-Real Azure deployment is documented in [docs/azure-deployment.md](docs/azure-deployment.md) and requires explicit `ALLOW_AZURE_DEPLOY=true`. It will never run automatically.
+Local release checks cover **127 unit tests, 49 PostgreSQL integration tests, 7 API integration tests, 7 emulator integration tests and 5 browser tests**. The browser checks create actual executions and inspect retry history, graph nodes, private artifacts, immutable replay/requeue, cancellation, keyboard focus and mobile navigation. See [acceptance evidence](docs/acceptance.md).
 
----
+Format, lint, strict typecheck and workspace build are release gates. CI runs these checks and database tests; separate workflows scan full Git history/source and dependencies, and exercise Docker emulators plus the console. No workflow deploys Azure or invokes paid providers.
 
-## 5-Minute Local Setup
+[Security controls](docs/security.md) include localhost Host/Origin checks, safe response headers, bounded bodies/artifacts, input validation and credential-free logs/traces. Gitleaks scans history and non-ignored source. Dependabot proposes updates for review. Dependency audit results and any exceptions are recorded in the security document.
 
-**Prerequisites:** Docker Desktop, Node.js 22+, pnpm 9+
-
-```bash
-# 1. Clone
-git clone https://github.com/PeterYousefi/agent-flight-recorder.git
-cd agent-flight-recorder
-
-# 2. Configure environment (defaults work for local Docker setup)
-cp .env.example .env
-
-# 3. Install dependencies
-make setup
-
-# 4. Start infrastructure (PostgreSQL, Service Bus emulator, Azurite, OTel stack)
-docker compose up -d
-
-# 5. Run migrations and start all services
-make dev
+```sh
+pnpm format:check
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+# Install Gitleaks first and put it on PATH:
+pnpm security:secrets
+pnpm security:audit
+# With the complete demo running:
+node scripts/local/verify-demo.mjs
+pnpm --filter @afr/web exec playwright test
+pnpm benchmark
 ```
 
-Services:
+## Benchmarks
 
-- Dashboard: http://localhost:5173
-- API: http://localhost:3000
-- API docs: http://localhost:3000/api/docs
-- Grafana: http://localhost:3001 (admin/admin)
-- Prometheus: http://localhost:9090
+[Reproducible local results](docs/benchmarks.md) measure HTTP list/create/history latency, scheduling, queue-to-worker delay and terminal throughput using actual emulator work. `pnpm benchmark` leaves its executions inspectable and writes an ignored local report. Small samples on one development machine are evidence of a functioning path, not production capacity claims. Creation timing includes transactional snapshot/event/outbox writes; it does not isolate event persistence overhead.
 
-T-02 implementation notes:
+## Engineering decisions and limits
 
-- Service Bus, OTel Collector, and Tempo use companion health-check containers because their images cannot run the required shell-based probes.
-- Grafana uses port 3001 locally instead of the port 3000 listed in ADR-0006.
+The [ADRs](docs/adr) explain TypeScript, event-driven execution, infrastructure ports, PostgreSQL, local Azure emulation, OpenTelemetry and replay. [Reliability](docs/reliability.md) distinguishes durable local idempotency from repeated external effects, explains lease recovery and discusses private-blob orphan cleanup.
 
----
+This release is for local operation. It has no multi-user authentication or tenant isolation and must not be exposed publicly. Queue depth is unavailable through the emulator's SDK management surface. Settings report dependency health rather than proving worker liveness. Dollar limits cannot preflight unknown-priced Sapiom calls or guarantee a remote billing cap. Grafana/Tempo have finite local retention. The dashboard polls and bounds event loading at 5,000 facts. Cloud deployment requires additional runtime adapters/configuration, managed identity roles, PostgreSQL, network/auth hardening, packaging and resource budgets; the Bicep reference is intentionally undeployed.
 
-## Demo Scenarios
+Next improvements: authenticated tenant-scoped APIs and artifacts; a provider deduplication/usage-pricing contract plus crash/orphan reconciliation; deployable cloud runtime packaging with verified managed identity and production load/fault testing.
 
-```bash
-make demo
-```
+## Documentation
 
-Or launch scenarios from the **Demo Lab** page in the dashboard. Available scenarios:
-
-1. Successful execution — full lifecycle, events, trace
-2. Transient failure → automatic retry → success
-3. Budget exceeded — rejected before execution
-4. Timeout — execution terminated mid-flight
-5. Permanent failure → dead-letter → requeue
-6. Replay — simulation replay of a failed execution
-
-All scenarios use `MockProvider` — no Sapiom credentials or API costs required.
-
----
-
-## Technology Stack
-
-| Layer              | Technology                                                        |
-| ------------------ | ----------------------------------------------------------------- |
-| Language           | TypeScript (strict)                                               |
-| API                | Node.js 22 + Fastify                                              |
-| Worker             | Node.js 22                                                        |
-| Dashboard          | React + TypeScript + Vite                                         |
-| ORM                | Prisma + PostgreSQL 16                                            |
-| Queue              | `@azure/service-bus` → Azure Service Bus emulator                 |
-| Artifact storage   | `@azure/storage-blob` → Azurite                                   |
-| Observability      | OpenTelemetry SDK → OTel Collector → Prometheus + Tempo → Grafana |
-| Sapiom integration | `@sapiom/tools` (optional)                                        |
-| Testing            | Vitest                                                            |
-| Monorepo           | pnpm workspaces                                                   |
-
----
-
-## Testing
-
-```bash
-make test          # all tests
-make test-unit     # unit tests only (no Docker required)
-make test-integration  # integration tests (requires docker compose up -d)
-```
-
-Test coverage includes:
-
-- Every state machine transition (unit)
-- Every budget policy boundary (unit)
-- Retry and backoff logic (unit)
-- Idempotency under concurrent requests (integration)
-- Worker end-to-end flow (integration)
-- Replay immutability (integration)
-- State machine invariants (property-based)
-
----
-
-## Sapiom Integration
-
-Agent Flight Recorder wraps Sapiom tool calls via `@sapiom/tools`:
-
-```typescript
-// SapiomProvider uses the documented @sapiom/tools createClient()
-const client = createClient({ apiKey: process.env.SAPIOM_API_KEY })
-```
-
-When `SAPIOM_API_KEY` is not set, the system automatically uses `MockProvider`. The dashboard, demo, and all tests work without a Sapiom account.
-
-What Agent Flight Recorder adds on top of Sapiom:
-
-- Durable execution state and history
-- Budget enforcement before and during execution
-- Structured event log with replay capability
-- OTel traces for every tool invocation
-- Dead-letter handling for failed executions
-- Operational dashboard
-
-See [docs/integrations/sapiom.md](docs/integrations/sapiom.md) for the full integration description, including honest documentation of what Sapiom's public SDK does and does not provide.
-
----
-
-## Repository Structure
-
-```
-apps/
-  api/          Fastify REST API
-  worker/       Async execution worker
-  web/          React operations dashboard
-packages/
-  domain/       Core types, state machine, interfaces (no I/O)
-  providers/    MockProvider + SapiomProvider
-  observability/ OTel setup, metrics, structured logger
-infra/
-  local/        Docker Compose + emulator configs
-  azure/        Bicep IaC templates (never auto-applied)
-docs/
-  adr/          Architecture Decision Records
-  integrations/ Sapiom integration documentation
-scripts/
-  demo.sh       Scripted demonstration
-  seed.ts       Demo data seeder
-  azure/        Cost estimation + teardown scripts
-.kiro/
-  steering/     Persistent context for Kiro AI
-  specs/        Requirements, design, tasks
-```
-
----
-
-## Engineering Decisions
-
-See [docs/adr/](docs/adr/) for full Architecture Decision Records.
-
-| ADR                                                  | Decision                                                               |
-| ---------------------------------------------------- | ---------------------------------------------------------------------- |
-| [0001](docs/adr/0001-language-and-framework.md)      | TypeScript + Node.js + Fastify — native Sapiom SDK integration         |
-| [0002](docs/adr/0002-event-driven-execution.md)      | Event-driven async execution — durability and inspectability           |
-| [0003](docs/adr/0003-service-bus-abstraction.md)     | MessageBus interface over Azure Service Bus — testability + cloud path |
-| [0004](docs/adr/0004-postgresql-persistence.md)      | PostgreSQL + Prisma — explicit migrations, strong typing               |
-| [0005](docs/adr/0005-local-first-azure-emulation.md) | Local-first with Azure emulators — $0 cost by default                  |
-| [0006](docs/adr/0006-opentelemetry.md)               | OpenTelemetry — vendor-neutral, spans across async boundaries          |
-| [0007](docs/adr/0007-replay-semantics.md)            | Two replay modes — honest about non-determinism                        |
-
----
-
-## Known Limitations
-
-- Sapiom's `@sapiom/tools` SDK is in v0.x beta — the integration surface may change before v1.0.
-- Sapiom does not currently expose a public API for execution status, cost tracking, or replay. The `SapiomProvider` wraps capability calls but cannot provide measured cost data (estimated cost only).
-- The Azure Service Bus emulator requires a SQL Server Linux sidecar (~500MB Docker footprint).
-- Grafana Tempo stores traces in memory by default — traces do not persist across container restarts.
-- Simulation replay uses `MockProvider` — it does not reproduce the exact bytes of the original provider response.
-
----
-
-## License
-
-Apache-2.0 — see [LICENSE](LICENSE).
+- [Architecture](docs/architecture.md), [persistence](docs/persistence.md), [event model](docs/event-model.md)
+- [Reliability](docs/reliability.md), [retries](docs/retries.md), [replay](docs/replay.md), [dead letters](docs/dead-letters.md)
+- [Budgets](docs/budgets.md), [artifacts](docs/artifacts.md), [Sapiom](docs/integrations/sapiom.md)
+- [Observability](docs/observability.md), [operations](docs/operations.md), [Demo Lab](docs/demo.md)
+- [Local development](docs/local-development.md), [security](docs/security.md), [Azure architecture and opt-in policy](docs/azure-deployment.md)
+- [Benchmarks](docs/benchmarks.md), [acceptance evidence](docs/acceptance.md)

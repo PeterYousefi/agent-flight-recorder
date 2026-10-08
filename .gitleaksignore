@@ -1,0 +1,5 @@
+# Exact historical false positives reviewed during T-30:
+# Lovable fixture idempotency identifier; never a provider credential.
+1e84f64c2be34dffc739b3df647f2efcba7e9279:apps/lovable-ui/src/lib/mock-data.ts:generic-api-key:711
+# Public Azurite development-storage key from the initial example file.
+a73c624fc5bcfec35244564ec3dcfb75e85ccdc6:.env.example:generic-api-key:36

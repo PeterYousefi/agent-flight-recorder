@@ -52,6 +52,34 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
     ajv: { customOptions: { removeAdditional: false, useDefaults: false } },
   })
   await api.register(cors, { origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] })
+  api.addHook('onRequest', async (request, reply) => {
+    const host = request.headers.host ?? 'localhost'
+    let hostname: string
+    try {
+      hostname = new URL(`http://${host}`).hostname
+    } catch {
+      return reply.code(400).send({
+        error: { code: 'INVALID_HOST', message: 'Invalid local host', request_id: request.id },
+      })
+    }
+    if (!['localhost', '127.0.0.1'].includes(hostname))
+      return reply.code(403).send({
+        error: { code: 'LOCAL_ONLY', message: 'Local host required', request_id: request.id },
+      })
+    const origin = request.headers.origin
+    if (
+      origin !== undefined &&
+      !['http://localhost:5173', 'http://127.0.0.1:5173', `http://${host}`].includes(origin)
+    )
+      return reply.code(403).send({
+        error: {
+          code: 'ORIGIN_REJECTED',
+          message: 'Local origin required',
+          request_id: request.id,
+        },
+      })
+  })
+
   api.addHook('onRoute', (route) => {
     if (!route.url.startsWith('/api/v1/')) return
     const method = String(route.method)
@@ -110,8 +138,15 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
   api.addHook('onSend', async (request, reply) => {
     reply
       .header('x-request-id', request.id)
-      .header('x-content-type-options', 'nosniff')
       .header('referrer-policy', 'no-referrer')
+      .header('permissions-policy', 'camera=(), microphone=(), geolocation=()')
+      .header('x-frame-options', 'DENY')
+      .header(
+        'content-security-policy',
+        "frame-ancestors 'none'; base-uri 'self'; object-src 'none'",
+      )
+      .header('cross-origin-resource-policy', 'same-site')
+      .header('x-content-type-options', 'nosniff')
       .header('cache-control', 'no-store')
   })
   api.setErrorHandler((error, request, reply) => {

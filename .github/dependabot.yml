@@ -5,9 +5,15 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-
+    groups:
+      opentelemetry:
+        patterns:
+          - '@opentelemetry/*'
+      prisma:
+        patterns:
+          - 'prisma'
+          - '@prisma/*'
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5

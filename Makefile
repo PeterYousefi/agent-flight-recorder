@@ -15,7 +15,7 @@ help:
 	@echo "  make format-check       Check formatting without writing"
 	@echo "  make typecheck          Run TypeScript compiler check across all packages"
 	@echo "  make migrate            Run Prisma database migrations"
-	@echo "  make demo               Seed demo data and run scripted demonstration"
+	@echo "  make demo               Start the complete local mock demo"
 	@echo "  make down               Stop all Docker services"
 	@echo "  make clean              Remove build artifacts and node_modules"
 	@echo "  make build              Build all packages"
@@ -40,11 +40,11 @@ dev:
 
 migrate:
 	@echo "→ Running Prisma migrations..."
-	pnpm --filter @afr/domain exec prisma migrate deploy
+	pnpm --filter @afr/persistence prisma:migrate:deploy
 
 migrate-dev:
 	@echo "→ Running Prisma migrations in dev mode (creates migration files)..."
-	pnpm --filter @afr/domain exec prisma migrate dev
+	pnpm --filter @afr/persistence exec prisma migrate dev
 
 # ─────────────────────────────────────────────
 # Testing
@@ -89,10 +89,7 @@ build:
 # Demo
 # ─────────────────────────────────────────────
 demo:
-	@echo "→ Seeding demo data..."
-	pnpm --filter @afr/api exec tsx scripts/seed.ts
-	@echo "→ Running scripted demonstration..."
-	bash scripts/demo.sh
+	pnpm demo
 
 # ─────────────────────────────────────────────
 # Docker

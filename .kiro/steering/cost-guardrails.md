@@ -73,7 +73,7 @@ fi
 
 ## Cost Documentation
 
-- `scripts/azure/estimate-or-explain-cost.sh` explains which Azure services would incur charges and provides rough estimates.
+- `scripts/azure/estimate-or-explain-cost.sh` explains which Azure services would incur charges without inventing regional price estimates.
 - `scripts/azure/destroy.sh` provides rapid teardown of any Azure resources that were explicitly deployed.
 - `docs/azure-deployment.md` includes a cost breakdown and teardown instructions.
 
@@ -102,8 +102,8 @@ Under normal development, this should return an empty table or only resources yo
 
 The project must run completely without:
 
-- A Sapiom API key (`SAPIOM_API_KEY` absent → MockProvider is used automatically)
+- A Sapiom API key (the default demo explicitly selects MockProvider)
 - Any LLM API key (OpenAI, Anthropic, etc.)
 - Any paid search or data API
 
-When `SAPIOM_API_KEY` is not set, the system logs a warning and routes all executions through `MockProvider`. The demo, tests, and dashboard all work in this mode.
+`SAPIOM_ENABLED=false` is the default. Explicit Sapiom requests fail when unavailable; they never silently become mock executions. The demo selects MockProvider and strips Sapiom credentials from its child environment.

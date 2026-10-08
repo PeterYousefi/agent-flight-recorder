@@ -161,6 +161,25 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       expect(huge.statusCode).toBe(413)
       expect(huge.body).not.toContain('stack')
       expect(huge.headers['x-content-type-options']).toBe('nosniff')
+      expect(huge.headers['x-frame-options']).toBe('DENY')
+      expect(huge.headers['content-security-policy']).toContain("frame-ancestors 'none'")
+    })
+    it('rejects hostile browser origins and non-local hosts before mutations', async () => {
+      const rejected = await api.inject({
+        method: 'POST',
+        url: '/api/v1/demo/scenarios/success/run',
+        headers: { origin: 'https://untrusted.example' },
+      })
+      expect(rejected.statusCode).toBe(403)
+      expect(rejected.json().error.code).toBe('ORIGIN_REJECTED')
+      expect(
+        (await api.inject({ url: '/api/v1/health', headers: { host: 'untrusted.example' } }))
+          .statusCode,
+      ).toBe(403)
+      expect(
+        (await api.inject({ url: '/api/v1/health', headers: { origin: 'http://localhost:5173' } }))
+          .statusCode,
+      ).toBe(200)
     })
     it('requeues a historical dead letter into a new execution', async () => {
       const created = await api.inject({

@@ -34,26 +34,7 @@ Agent Flight Recorder provides exactly this control and observability layer. It 
 
 ## Relationship to Sapiom
 
-Sapiom is an execution engine and capability network for AI agents. It provides:
-
-- a typed agent authoring SDK (`@sapiom/agent`)
-- a capability client for invoking tools (`@sapiom/tools`)
-- a deployment and scheduling CLI (`@sapiom/cli`)
-- a model router
-
-Sapiom does **not** currently expose a public API for:
-
-- querying execution status and history
-- tracking per-execution costs in a structured, queryable way
-- defining budget policies that block or stop executions
-- replaying historical executions
-- inspecting dead-lettered or permanently failed work
-- emitting OpenTelemetry traces across async execution boundaries
-- providing a dashboard for operational oversight
-
-Agent Flight Recorder complements Sapiom by providing exactly these missing layers. The `SapiomProvider` adapter wraps `@sapiom/tools` calls so that every invocation flows through the control plane, gaining durability, observability, and cost awareness that Sapiom itself does not offer at the API level.
-
-This is additive infrastructure, not competition.
+AFR integrates the verified Sapiom Router chat-completions API behind `ExecutionProvider`. The adapter is optional and disabled by default. AFR owns its local durable history, retries, budgets and observability. Do not infer limitations of Sapiom's broader platform from this narrow integration. See `docs/integrations/sapiom.md` for verified scope and limitations.
 
 ## Portfolio Goal
 

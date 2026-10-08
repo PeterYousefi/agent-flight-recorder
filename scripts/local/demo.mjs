@@ -18,7 +18,13 @@ const env = {
 delete env.SAPIOM_API_KEY
 const children = []
 function start(command, args) {
-  const child = spawn(command, args, { cwd: root, env, stdio: 'inherit', shell: false })
+  const child = spawn(command, args, {
+    cwd: root,
+    env,
+    stdio: 'inherit',
+    shell: false,
+    detached: process.platform !== 'win32',
+  })
   children.push(child)
   return child
 }
@@ -45,7 +51,15 @@ let stopping = false
 function stop() {
   if (stopping) return
   stopping = true
-  for (const child of children) if (child.exitCode === null) child.kill('SIGTERM')
+  for (const child of children)
+    if (child.exitCode === null) {
+      try {
+        if (process.platform === 'win32') child.kill('SIGTERM')
+        else if (child.pid !== undefined) process.kill(-child.pid, 'SIGTERM')
+      } catch {
+        /* Child already exited. */
+      }
+    }
 }
 process.once('SIGINT', stop)
 process.once('SIGTERM', stop)

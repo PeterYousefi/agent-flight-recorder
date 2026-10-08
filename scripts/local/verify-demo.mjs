@@ -105,16 +105,29 @@ for (const name of [
     spans.some((s) => s.name === name),
     `Missing span ${name}`,
   )
-const metrics = await (await fetch('http://127.0.0.1:8889/metrics')).text()
-for (const name of [
+const requiredMetrics = [
   'afr_executions_total',
   'afr_executions_succeeded_total',
   'afr_execution_retry_total',
   'afr_dead_letter_total',
   'afr_budget_rejections_total',
-  'afr_estimated_execution_cost',
-])
-  assert.ok(metrics.includes(name), `Missing metric ${name}`)
+  'afr_estimated_execution_cost_USD_total',
+]
+let missingMetrics = [...requiredMetrics]
+// Metrics export independently of trace export; allow the 5-second reader to flush.
+for (let n = 0; n < 60; n++) {
+  const response = await fetch('http://127.0.0.1:8889/metrics', {
+    signal: AbortSignal.timeout(3000),
+  })
+  assert.ok(response.ok, 'Collector metrics endpoint unavailable')
+  const lines = (await response.text()).split('\n')
+  missingMetrics = requiredMetrics.filter(
+    (name) => !lines.some((line) => line.startsWith(name + '{') || line.startsWith(name + ' ')),
+  )
+  if (missingMetrics.length === 0) break
+  await delay(500)
+}
+assert.deepEqual(missingMetrics, [], 'Required committed-result metrics were not exported')
 process.stdout.write(
   `Verified real API → PostgreSQL → Service Bus → worker → private Azurite, retries, budgets, immutable replay/requeue, cancellation, Tempo and metrics.\nSignature execution: ${transient}\nTrace: ${traceId}\n`,
 )

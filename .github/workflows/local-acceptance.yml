@@ -1,0 +1,47 @@
+name: Local acceptance
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: local-acceptance-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  emulators-and-console:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SAPIOM_ENABLED: 'false'
+      RUN_LOCAL_AZURE_TESTS: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @afr/web exec playwright install --with-deps chromium
+      - name: Start the complete local demo
+        run: |
+          pnpm demo > "$RUNNER_TEMP/afr-demo.log" 2>&1 &
+          for n in $(seq 1 600); do
+            if curl -fsS http://127.0.0.1:3000/api/v1/ready >/dev/null && curl -fsS http://127.0.0.1:5173 >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          tail -60 "$RUNNER_TEMP/afr-demo.log"
+          exit 1
+      - name: Test Service Bus and private Azurite adapters
+        run: pnpm --filter @afr/adapters test:integration
+      - name: Verify backend scenarios, replay immutability, metrics and traces
+        run: node scripts/local/verify-demo.mjs
+      - name: Verify browser workflows and responsive console
+        run: pnpm --filter @afr/web exec playwright test
+      - name: Stop local containers
+        if: always()
+        run: docker compose --profile observability down
