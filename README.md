@@ -1,5 +1,7 @@
 # Agent Flight Recorder
 
+**[Live Azure demo](https://agent-recorder-demo.canadacentral.cloudapp.azure.com) · [GitHub repository](https://github.com/PeterYousefi/agent-flight-recorder) · [Download source ZIP](https://github.com/PeterYousefi/agent-flight-recorder/archive/refs/heads/main.zip)**
+
 **Observable, replayable, cost-aware AI agent infrastructure.**
 
 [![CI](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/ci.yml/badge.svg)](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/ci.yml) [![Security](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/security.yml/badge.svg)](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/security.yml) [![Local acceptance](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/local-acceptance.yml/badge.svg)](https://github.com/PeterYousefi/agent-flight-recorder/actions/workflows/local-acceptance.yml) [Apache 2.0](LICENSE)
@@ -17,8 +19,6 @@ Open [the Azure demo](https://agent-recorder-demo.canadacentral.cloudapp.azure.c
 The hosted demo runs on Azure in Canada Central and uses real PostgreSQL, Service Bus and private Blob Storage. Provider output and application cost figures are simulated. It is a shared demo: visitors can inspect and control one another's synthetic executions. [Hosting, costs and deletion instructions](docs/vm-azure-demo.md).
 
 ## Run the complete demo locally
-
-For a short project walkthrough, use the [three-minute Gamma presentation pack](docs/presentation/README.md): a five-slide prompt, per-slide narration and downloadable application screenshots.
 
 Prerequisites: Node.js 22+, pnpm 9.15.9 and running Docker Desktop/Compose. Allow Docker enough memory for PostgreSQL, the Service Bus emulator's SQL sidecar and the observability stack. Apple Silicon runs the emulator's SQL sidecar under amd64 emulation.
 
