@@ -29,7 +29,7 @@
     "tailwindcss": "4.2.1",
     "tw-animate-css": "1.3.4",
     "typescript": "5.9.3",
-    "vite": "6.4.4",
+    "vite": "8.3.2",
     "vitest": "5.0.3"
   },
   "dependencies": {
