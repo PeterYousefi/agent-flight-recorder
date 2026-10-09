@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@afr/domain": "workspace:*",
+    "@azure/core-auth": "1.11.0",
     "@azure/service-bus": "7.10.0",
     "@azure/storage-blob": "12.27.0"
   },

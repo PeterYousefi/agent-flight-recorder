@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
-import { request, type OverviewDto } from '@/lib/api'
+import { request, publicDemo, grafanaUrl, prometheusUrl, type OverviewDto } from '@/lib/api'
 import { MetricCard } from '@/components/console/metric-card'
 import { fmtDuration } from '@/lib/data'
 import { Loading, ErrorState } from '@/components/states'
@@ -28,7 +28,9 @@ function ObservabilityPage(): JSX.Element {
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Observability</h1>
         <p className="font-mono text-[11px] text-muted-foreground">
-          Persisted aggregate observations · local OpenTelemetry stack
+          {publicDemo
+            ? 'Persisted observations · hosted demo'
+            : 'Persisted aggregate observations · local OpenTelemetry stack'}
         </p>
       </div>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -60,44 +62,52 @@ function ObservabilityPage(): JSX.Element {
         <MetricCard
           label="Transport queue depth"
           value="Unavailable"
-          hint="Emulator counter limitation"
+          hint={
+            publicDemo
+              ? 'Queue administration access is not granted'
+              : 'Emulator counter limitation'
+          }
         />
         <MetricCard label="Dead letters" value={String(s.dead_letters)} />
         <MetricCard label="Replays" value={String(s.replays)} />
       </div>
       <div className="panel space-y-3 p-4">
-        <h2 className="text-sm font-semibold">Local traces and metrics</h2>
+        <h2 className="text-sm font-semibold">
+          {publicDemo ? 'Traces and metrics' : 'Local traces and metrics'}
+        </h2>
         <p className="text-sm text-muted-foreground">
-          Grafana displays real execution rates, latency histograms, failures, costs and queue
-          activity. Trace IDs in execution events connect HTTP, queue, worker, provider and artifact
-          spans.
+          {publicDemo && !grafanaUrl
+            ? 'These metrics come from persisted execution facts. Trace correlation remains available in execution history. Public Grafana, Prometheus and span viewers are not configured for this sandbox.'
+            : 'Grafana displays real execution rates, latency histograms, failures, costs and queue activity. Trace IDs in execution events connect HTTP, queue, worker, provider and artifact spans.'}
         </p>
-        <div className="flex flex-wrap gap-3 font-mono text-xs">
-          <a
-            href="http://localhost:3001/d/afr-operations"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary hover:underline"
-          >
-            Grafana dashboard ↗
-          </a>
-          <a
-            href="http://localhost:9090"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary hover:underline"
-          >
-            Prometheus ↗
-          </a>
-          <a
-            href="http://localhost:3001/explore"
-            target="_blank"
-            rel="noreferrer"
-            className="text-primary hover:underline"
-          >
-            Tempo traces ↗
-          </a>
-        </div>
+        {grafanaUrl && prometheusUrl && (
+          <div className="flex flex-wrap gap-3 font-mono text-xs">
+            <a
+              href={`${grafanaUrl}/d/afr-operations`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary hover:underline"
+            >
+              Grafana dashboard ↗
+            </a>
+            <a
+              href={prometheusUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary hover:underline"
+            >
+              Prometheus ↗
+            </a>
+            <a
+              href={`${grafanaUrl}/explore`}
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary hover:underline"
+            >
+              Tempo traces ↗
+            </a>
+          </div>
+        )}
       </div>
     </div>
   )

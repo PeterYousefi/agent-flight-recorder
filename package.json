@@ -2,6 +2,7 @@
   "name": "agent-flight-recorder",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@9.15.9",
   "description": "A local-first execution control plane for observable, replayable, cost-aware AI agent workloads",
   "engines": {
     "node": ">=22.0.0",

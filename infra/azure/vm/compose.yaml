@@ -1,0 +1,111 @@
+# Full public demo on a free 1 GiB ARM VM. Azure resources are provisioned separately.
+name: afr-public-demo
+x-service: &service
+  restart: unless-stopped
+  logging:
+    driver: json-file
+    options: { max-size: '5m', max-file: '2' }
+services:
+  app:
+    <<: *service
+    image: ${AFR_IMAGE:-afr:azure-vm-demo}
+    mem_limit: 256m
+    memswap_limit: 384m
+    environment:
+      NODE_OPTIONS: --max-old-space-size=96
+      AFR_RUNTIME: azure
+      AFR_PUBLIC_DEMO: 'true'
+      AFR_PUBLIC_ORIGIN: https://${DEMO_HOST}
+      AFR_SERVE_WEB: 'true'
+      AFR_EMBEDDED_WORKER: 'true'
+      AFR_VM_OBSERVABILITY: 'true'
+      SAPIOM_ENABLED: 'false'
+      WORKER_CONCURRENCY: '1'
+      API_PORT: '3000'
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      DATABASE_URL: ${DATABASE_URL:?Required}
+      AZURE_CLIENT_ID: ${AZURE_CLIENT_ID:?Required}
+      AZURE_SERVICE_BUS_NAMESPACE: ${AZURE_SERVICE_BUS_NAMESPACE:?Required}
+      AZURE_BLOB_ENDPOINT: ${AZURE_BLOB_ENDPOINT:?Required}
+      # Managed identity SDK accesses the VM metadata service through this network.
+      NO_PROXY: 169.254.169.254
+    depends_on: [otel-collector]
+  caddy:
+    <<: *service
+    image: caddy:2.11.7-alpine
+    mem_limit: 64m
+    memswap_limit: 96m
+    environment: { DEMO_HOST: '${DEMO_HOST}', GOMEMLIMIT: 40MiB }
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app, grafana, prometheus]
+  otel-collector:
+    <<: *service
+    image: otel/opentelemetry-collector-contrib:0.162.0
+    mem_limit: 384m
+    memswap_limit: 512m
+    environment: { GOMEMLIMIT: 160MiB }
+    command: ['--config=/etc/otelcol/config.yaml']
+    volumes: ['./otel.yaml:/etc/otelcol/config.yaml:ro']
+    depends_on: [tempo]
+  tempo:
+    <<: *service
+    image: grafana/tempo:2.9.0
+    mem_limit: 224m
+    memswap_limit: 320m
+    environment: { GOMEMLIMIT: 160MiB }
+    command: ['-config.file=/etc/tempo.yaml']
+    volumes: ['./tempo.yaml:/etc/tempo.yaml:ro', 'tempo_data:/var/tempo']
+  prometheus:
+    <<: *service
+    image: prom/prometheus:v3.15.0
+    mem_limit: 80m
+    memswap_limit: 112m
+    environment: { GOMEMLIMIT: 55MiB }
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+      - --storage.tsdb.retention.size=128MB
+      - --web.external-url=https://${DEMO_HOST}/prometheus/
+      - --web.route-prefix=/
+    volumes: ['./prometheus.yaml:/etc/prometheus/prometheus.yml:ro', 'prometheus_data:/prometheus']
+    depends_on: [otel-collector]
+  grafana:
+    <<: *service
+    image: grafana/grafana:13.2.3
+    mem_limit: 512m
+    memswap_limit: 768m
+    cpus: 2
+    environment:
+      GOMEMLIMIT: 320MiB
+      GOMAXPROCS: '2'
+      GF_SERVER_ROOT_URL: https://${DEMO_HOST}/grafana/
+      GF_SERVER_SERVE_FROM_SUB_PATH: 'true'
+      GF_AUTH_ANONYMOUS_ENABLED: 'true'
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: 'true'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?Required}
+      GF_ANALYTICS_REPORTING_ENABLED: 'false'
+      GF_ANALYTICS_CHECK_FOR_UPDATES: 'false'
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: 'false'
+      GF_DATABASE_HIGH_AVAILABILITY: 'false'
+      GF_DATABASE_WAL: 'true'
+      GF_UNIFIED_ALERTING_ENABLED: 'false'
+      GF_PLUGINS_PREINSTALL_DISABLED: 'true'
+      GF_LOG_LEVEL: warn
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ../../local/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+      - ../../local/grafana/dashboards/dashboards.yaml:/etc/grafana/provisioning/dashboards/dashboards.yaml:ro
+      - ../../local/grafana/dashboards/operations.json:/var/lib/grafana/dashboards/operations.json:ro
+    depends_on: [prometheus, tempo]
+volumes:
+  caddy_data:
+  caddy_config:
+  grafana_data:
+  prometheus_data:
+  tempo_data:

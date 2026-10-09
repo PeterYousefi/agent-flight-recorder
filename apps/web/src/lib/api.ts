@@ -106,6 +106,11 @@ export interface Page<T> {
   items: T[]
   next_offset: number | null
 }
+export const publicDemo = import.meta.env.VITE_PUBLIC_DEMO === 'true'
+export const grafanaUrl =
+  import.meta.env.VITE_GRAFANA_URL ?? (publicDemo ? '' : 'http://localhost:3001')
+export const prometheusUrl =
+  import.meta.env.VITE_PROMETHEUS_URL ?? (publicDemo ? '' : 'http://localhost:9090')
 const origin = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3000'
 export class ApiError extends Error {
   public constructor(
@@ -135,7 +140,9 @@ export async function request<T>(
     throw new ApiError(
       0,
       'UNAVAILABLE',
-      'The local API is unavailable. Start pnpm demo and try again.',
+      publicDemo
+        ? 'The hosted demo is unavailable. Please try again shortly.'
+        : 'The local API is unavailable. Start pnpm demo and try again.',
     )
   }
   if (!response.ok) {

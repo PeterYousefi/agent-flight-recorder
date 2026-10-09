@@ -1,0 +1,20 @@
+#cloud-config
+package_update: true
+packages: [docker.io, docker-buildx, docker-compose-v2]
+write_files:
+  - path: /etc/docker/daemon.json
+    permissions: '0644'
+    content: |
+      {"log-driver":"json-file","log-opts":{"max-size":"5m","max-file":"2"}}
+  - path: /etc/sysctl.d/90-afr-demo.conf
+    content: |
+      vm.swappiness=10
+runcmd:
+  - [systemctl, enable, --now, docker]
+  - [fallocate, -l, 4G, /swapfile]
+  - [chmod, '600', /swapfile]
+  - [mkswap, /swapfile]
+  - [swapon, /swapfile]
+  - [sh, -c, "echo '/swapfile none swap sw 0 0' >> /etc/fstab"]
+  - [sysctl, --system]
+  - [usermod, -aG, docker, afradmin]

@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { BlobServiceClient, type ContainerClient } from '@azure/storage-blob'
+import type { TokenCredential } from '@azure/core-auth'
 import {
   createArtifactMetadata,
   createArtifactReference,
@@ -15,19 +16,28 @@ import { AdapterError } from './errors.js'
 export class AzuriteArtifactStore implements ArtifactStore {
   private readonly container: ContainerClient
   public constructor(
-    connectionString: string,
+    connectionString: string | { readonly endpoint: string; readonly credential: TokenCredential },
     containerName = 'execution-artifacts',
     private readonly maxSizeBytes = 1048576,
   ) {
     if (!Number.isSafeInteger(maxSizeBytes) || maxSizeBytes < 1 || maxSizeBytes > 10485760)
       throw new AdapterError('INVALID', 'Invalid artifact size limit')
-    const client = BlobServiceClient.fromConnectionString(connectionString, {
-      retryOptions: { maxTries: 3, tryTimeoutInMs: 10000 },
-    })
+    const options = { retryOptions: { maxTries: 3, tryTimeoutInMs: 10000 } }
+    const client =
+      typeof connectionString === 'string'
+        ? BlobServiceClient.fromConnectionString(connectionString, options)
+        : new BlobServiceClient(connectionString.endpoint, connectionString.credential, options)
     const endpoint = new URL(client.url)
     if (
-      endpoint.protocol !== 'http:' ||
-      !['localhost', '127.0.0.1', 'azurite'].includes(endpoint.hostname)
+      typeof connectionString === 'string'
+        ? endpoint.protocol !== 'http:' ||
+          !['localhost', '127.0.0.1', 'azurite'].includes(endpoint.hostname)
+        : endpoint.protocol !== 'https:' ||
+          !/^[a-z0-9]+\.blob\.core\.windows\.net$/.test(endpoint.hostname) ||
+          endpoint.pathname !== '/' ||
+          endpoint.search !== '' ||
+          endpoint.username !== '' ||
+          endpoint.password !== ''
     )
       throw new AdapterError('INVALID', 'This runtime requires local Azurite')
     this.container = client.getContainerClient(containerName)

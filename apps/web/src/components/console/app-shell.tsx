@@ -14,7 +14,7 @@ import {
 import { Command } from 'cmdk'
 import { cn } from '@/lib/utils'
 import { useQuery } from '@tanstack/react-query'
-import { request, type ExecutionDto, type Page } from '@/lib/api'
+import { request, publicDemo, type ExecutionDto, type Page } from '@/lib/api'
 import { project } from '@/lib/data'
 import { StatusDot } from './status-badge'
 
@@ -193,7 +193,9 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
             <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
               Mode
             </span>
-            <span className="font-mono text-[11px] text-primary">Local · mock demos</span>
+            <span className="font-mono text-[11px] text-primary">
+              {publicDemo ? 'Public · mock demos' : 'Local · mock demos'}
+            </span>
           </div>
           <div className="flex items-center justify-between rounded-sm border border-border bg-background/50 px-2.5 py-1.5">
             <span className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">
@@ -233,7 +235,7 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
           <div className="ml-auto flex items-center gap-3">
             <span className="hidden items-center gap-1.5 rounded-sm border border-border bg-card px-2 py-1 font-mono text-[11px] text-muted-foreground sm:inline-flex">
               <span className="size-1.5 rounded-full bg-primary" />
-              local-dev
+              {publicDemo ? 'azure-demo' : 'local-dev'}
             </span>
             <span className="hidden items-center gap-1.5 font-mono text-[11px] md:inline-flex">
               <span
@@ -281,7 +283,16 @@ export function AppShell({ children }: { children: ReactNode }): JSX.Element {
           })}
         </nav>
 
-        <main className="min-w-0 flex-1 p-4 md:p-6">{children}</main>
+        <main className="min-w-0 flex-1 p-4 md:p-6">
+          {publicDemo && (
+            <div className="mb-4 rounded-sm border border-primary/30 bg-primary/5 p-3 text-xs">
+              Public shared sandbox · real asynchronous executions with MockProvider only. Inputs
+              and costs are synthetic. Paid providers are disabled; usage limits keep this demo
+              bounded.
+            </div>
+          )}
+          {children}
+        </main>
       </div>
 
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />

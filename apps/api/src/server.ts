@@ -2,6 +2,8 @@ import Fastify, { LogController, type FastifyInstance } from 'fastify'
 import cors from '@fastify/cors'
 import swagger from '@fastify/swagger'
 import swaggerUi from '@fastify/swagger-ui'
+import staticFiles from '@fastify/static'
+import rateLimit from '@fastify/rate-limit'
 import { traced, parentContext } from '@afr/observability'
 import { randomUUID } from 'node:crypto'
 import { ZodError } from 'zod'
@@ -43,15 +45,74 @@ export interface ApiDependencies {
   readonly ready: () => Promise<boolean>
   readonly operationalStatus?: () => Promise<Record<string, unknown>>
 }
-export async function createApi(deps: ApiDependencies): Promise<FastifyInstance> {
+export interface ApiOptions {
+  readonly publicOrigin?: string
+  readonly publicDemo?: boolean
+  readonly staticWebRoot?: string
+}
+export async function createApi(
+  deps: ApiDependencies,
+  options: ApiOptions = {},
+): Promise<FastifyInstance> {
+  const publicOrigin =
+    options.publicOrigin === undefined ? undefined : new URL(options.publicOrigin)
+  if (
+    publicOrigin !== undefined &&
+    (publicOrigin.protocol !== 'https:' || publicOrigin.origin !== options.publicOrigin)
+  )
+    throw new Error('Public origin must be an exact HTTPS origin')
+  if (options.publicDemo && publicOrigin === undefined)
+    throw new Error('Public demo requires a configured HTTPS origin')
   const api = Fastify({
     logger: false,
     bodyLimit: 1048576,
     genReqId: () => randomUUID(),
     logController: new LogController({ disableRequestLogging: true }),
     ajv: { customOptions: { removeAdditional: false, useDefaults: false } },
+    trustProxy: options.publicDemo ? (_address: string, hop: number): boolean => hop === 0 : false,
   })
-  await api.register(cors, { origin: ['http://localhost:5173', 'http://127.0.0.1:5173'] })
+  await api.register(cors, {
+    origin:
+      publicOrigin === undefined
+        ? ['http://localhost:5173', 'http://127.0.0.1:5173']
+        : [publicOrigin.origin],
+  })
+  if (options.publicDemo) {
+    api.addHook('onRoute', (route) => {
+      if (String(route.method) === 'POST')
+        route.config = { ...route.config, rateLimit: { max: 10, timeWindow: '1 minute' } }
+    })
+    await api.register(rateLimit, { max: 300, timeWindow: '1 minute' })
+    api.addHook('onRequest', async (request, reply) => {
+      if (request.method !== 'POST') return
+      const pathname = request.url.split('?')[0] ?? ''
+      const allowed =
+        /^\/api\/v1\/(demo\/scenarios\/[a-z_]+\/run|executions\/[0-9a-f-]{36}\/(cancel|retry|replay)|dead-letter\/[0-9a-f-]{36}\/requeue)$/.test(
+          pathname,
+        )
+      if (!allowed)
+        return reply.code(403).send({
+          error: {
+            code: 'PUBLIC_DEMO_ONLY',
+            message: 'Only curated mock scenarios and their controls are available',
+            request_id: request.id,
+          },
+        })
+      if (pathname.endsWith('/cancel')) return
+      const overview = await deps.store.getOverview()
+      if (
+        overview.total >= 5000 ||
+        overview.hourly.reduce((sum, hour) => sum + hour.created, 0) >= 200
+      )
+        return reply.code(429).send({
+          error: {
+            code: 'DEMO_CAPACITY',
+            message: 'This shared demo has reached its execution limit',
+            request_id: request.id,
+          },
+        })
+    })
+  }
   api.addHook('onRequest', async (request, reply) => {
     const host = request.headers.host ?? 'localhost'
     let hostname: string
@@ -62,14 +123,24 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
         error: { code: 'INVALID_HOST', message: 'Invalid local host', request_id: request.id },
       })
     }
-    if (!['localhost', '127.0.0.1'].includes(hostname))
+    if (
+      ![
+        'localhost',
+        '127.0.0.1',
+        ...(publicOrigin === undefined ? [] : [publicOrigin.hostname]),
+      ].includes(hostname)
+    )
       return reply.code(403).send({
         error: { code: 'LOCAL_ONLY', message: 'Local host required', request_id: request.id },
       })
     const origin = request.headers.origin
     if (
       origin !== undefined &&
-      !['http://localhost:5173', 'http://127.0.0.1:5173', `http://${host}`].includes(origin)
+      !(
+        publicOrigin === undefined
+          ? ['http://localhost:5173', 'http://127.0.0.1:5173', `http://${host}`]
+          : [publicOrigin.origin]
+      ).includes(origin)
     )
       return reply.code(403).send({
         error: {
@@ -136,6 +207,7 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
   })
   await api.register(swaggerUi, { routePrefix: '/api/docs', uiConfig: { docExpansion: 'list' } })
   api.addHook('onSend', async (request, reply) => {
+    if (publicOrigin !== undefined) reply.header('strict-transport-security', 'max-age=31536000')
     reply
       .header('x-request-id', request.id)
       .header('referrer-policy', 'no-referrer')
@@ -170,10 +242,16 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
       message = error.message
     } else if (typeof error === 'object' && error !== null && 'statusCode' in error) {
       const candidate = error.statusCode
-      if (candidate === 400 || candidate === 413) {
+      if (candidate === 400 || candidate === 413 || candidate === 429) {
         status = candidate
-        code = candidate === 413 ? 'BODY_TOO_LARGE' : 'INVALID_REQUEST'
-        message = 'Request failed validation'
+        code =
+          candidate === 429
+            ? 'RATE_LIMITED'
+            : candidate === 413
+              ? 'BODY_TOO_LARGE'
+              : 'INVALID_REQUEST'
+        message =
+          candidate === 429 ? 'Too many requests. Try again later.' : 'Request failed validation'
       }
     }
     void reply.code(status).send({ error: { code, message, request_id: request.id } })
@@ -405,8 +483,8 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
     { schema: { summary: 'Safe provider and local infrastructure status; no credentials' } },
     async () => ({
       budget_defaults: defaults,
-      azure_deployment_enabled: false,
-      mode: 'local',
+      azure_deployment_enabled: options.publicDemo === true,
+      mode: options.publicDemo ? 'public_mock_demo' : 'local',
       ...(deps.operationalStatus === undefined
         ? {
             providers: [
@@ -424,5 +502,19 @@ export async function createApi(deps: ApiDependencies): Promise<FastifyInstance>
     reply.code(ready ? 200 : 503)
     return { status: ready ? 'ready' : 'unavailable' }
   })
+  if (options.staticWebRoot !== undefined) {
+    await api.register(staticFiles, { root: options.staticWebRoot, wildcard: false })
+    api.setNotFoundHandler((request, reply) => {
+      if (
+        request.method === 'GET' &&
+        !request.url.startsWith('/api/') &&
+        request.headers.accept?.includes('text/html')
+      )
+        return reply.sendFile('index.html')
+      return reply.code(404).send({
+        error: { code: 'NOT_FOUND', message: 'Resource was not found', request_id: request.id },
+      })
+    })
+  }
   return api
 }

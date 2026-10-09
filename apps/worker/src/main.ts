@@ -1,7 +1,11 @@
-import { createLocalRuntime } from '@afr/runtime'
+import { createRuntime, startDispatcher } from '@afr/runtime'
 import { traced, log } from '@afr/observability'
 async function main(): Promise<void> {
-  const runtime = await createLocalRuntime('worker')
+  const runtime = await createRuntime('worker')
+  const pump =
+    process.env.AFR_RUNTIME === 'azure'
+      ? startDispatcher(runtime.dispatcher, runtime.orchestrator)
+      : undefined
   const subscription = await runtime.bus.subscribe(
     (message) =>
       traced('worker.process', { 'execution.id': message.executionId }, () =>
@@ -15,6 +19,7 @@ async function main(): Promise<void> {
     if (closing) return
     closing = true
     await subscription.close()
+    await pump?.close()
     await runtime.close()
   }
   for (const signal of ['SIGINT', 'SIGTERM'] as const)

@@ -1,0 +1,23 @@
+# Optional local-only overlay: no cloud resources or credentials are used.
+services:
+  app:
+    environment:
+      AFR_RUNTIME: local
+      AFR_VM_OBSERVABILITY: 'false'
+      DATABASE_URL: postgresql://afr_user:afr_password@postgres:5432/agent_flight_recorder
+      AZURE_SERVICE_BUS_CONNECTION_STRING: Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+      AZURE_STORAGE_CONNECTION_STRING: UseDevelopmentStorage=true;DevelopmentStorageProxyUri=http://azurite:10000
+    ports: ['127.0.0.1:3333:3000']
+    networks: [default, emulators]
+  grafana:
+    ports: ['127.0.0.1:3334:3000']
+  prometheus:
+    ports: ['127.0.0.1:9390:9090']
+  tempo:
+    ports: ['127.0.0.1:3320:3200']
+  otel-collector:
+    ports: ['127.0.0.1:8899:8889']
+networks:
+  emulators:
+    external: true
+    name: afr-network

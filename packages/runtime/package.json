@@ -17,12 +17,13 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@afr/domain": "workspace:*",
-    "@afr/application": "workspace:*",
     "@afr/adapters": "workspace:*",
-    "@afr/providers": "workspace:*",
+    "@afr/application": "workspace:*",
+    "@afr/domain": "workspace:*",
+    "@afr/observability": "workspace:*",
     "@afr/persistence": "workspace:*",
-    "@afr/observability": "workspace:*"
+    "@afr/providers": "workspace:*",
+    "@azure/identity": "4.13.3"
   },
   "devDependencies": {
     "@types/node": "22.15.29",

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { ManagedIdentityCredential } from '@azure/identity'
 import { connectPostgres } from '@afr/persistence'
 import { AzureServiceBus, AzuriteArtifactStore } from '@afr/adapters'
 import { MockProvider, SapiomProvider } from '@afr/providers'
@@ -12,6 +13,7 @@ import {
 } from '@afr/application'
 import {
   startTelemetry,
+  startCloudTelemetry,
   ExecutionMetrics,
   correlation,
   traceContext,
@@ -20,11 +22,11 @@ import {
   observeArtifacts,
   log,
 } from '@afr/observability'
-import { readConfig } from './config.js'
-export { readConfig, type LocalConfig } from './config.js'
+import { readConfig, readAzureConfig } from './config.js'
+export { readConfig, readAzureConfig, type LocalConfig, type AzureConfig } from './config.js'
 
-export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
-  config: ReturnType<typeof readConfig>
+export async function createRuntime(service: 'api' | 'worker'): Promise<{
+  config: ReturnType<typeof readConfig> | ReturnType<typeof readAzureConfig>
   store: ReturnType<typeof connectPostgres>['store']
   orchestrator: ExecutionOrchestrator
   replay: ReplayService
@@ -37,15 +39,37 @@ export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
   ready: () => Promise<boolean>
   close: () => Promise<void>
 }> {
-  const config = readConfig()
-  const telemetry = startTelemetry(`afr-${service}`, config.telemetryEndpoint)
+  if (
+    process.env.AFR_RUNTIME !== undefined &&
+    !['local', 'azure'].includes(process.env.AFR_RUNTIME)
+  )
+    throw new Error('Invalid AFR_RUNTIME')
+  const cloud = process.env.AFR_RUNTIME === 'azure'
+  const vmObservability = cloud && process.env.AFR_VM_OBSERVABILITY === 'true'
+  const config = cloud ? readAzureConfig() : readConfig()
+  const telemetry =
+    cloud && !vmObservability
+      ? startCloudTelemetry(`afr-${service}`)
+      : startTelemetry(`afr-${service}`, config.telemetryEndpoint, cloud ? 'azure-demo' : 'local')
   const metrics = new ExecutionMetrics()
   const database = connectPostgres(config.databaseUrl, {
     correlation,
     committed: (facts, costs) => metrics.committed(facts, costs),
   })
-  const transport = new AzureServiceBus(config.serviceBusConnection)
-  const storage = new AzuriteArtifactStore(config.storageConnection)
+  const credential =
+    'mode' in config
+      ? new ManagedIdentityCredential({ clientId: config.identityClientId })
+      : undefined
+  const transport = new AzureServiceBus(
+    'mode' in config
+      ? { namespace: config.serviceBusNamespace, credential: credential! }
+      : config.serviceBusConnection,
+  )
+  const storage = new AzuriteArtifactStore(
+    'mode' in config
+      ? { endpoint: config.blobEndpoint, credential: credential! }
+      : config.storageConnection,
+  )
   const close = async (): Promise<void> => {
     await transport.close()
     await database.close()
@@ -87,9 +111,29 @@ export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
           safe(() => database.healthCheck()),
           safe(() => transport.healthCheck()),
           safe(() => storage.healthCheck()),
-          safe(() => probe('http://localhost:3200/ready')),
-          safe(() => probe('http://localhost:9090/-/ready')),
-          safe(() => probe('http://localhost:3001/api/health')),
+          cloud && !vmObservability
+            ? Promise.resolve('not_configured')
+            : safe(() =>
+                probe(vmObservability ? 'http://tempo:3200/ready' : 'http://localhost:3200/ready'),
+              ),
+          cloud && !vmObservability
+            ? Promise.resolve('not_configured')
+            : safe(() =>
+                probe(
+                  vmObservability
+                    ? 'http://prometheus:9090/-/ready'
+                    : 'http://localhost:9090/-/ready',
+                ),
+              ),
+          cloud && !vmObservability
+            ? Promise.resolve('not_configured')
+            : safe(() =>
+                probe(
+                  vmObservability
+                    ? 'http://grafana:3000/grafana/api/health'
+                    : 'http://localhost:3001/api/health',
+                ),
+              ),
         ])
         return {
           providers: [
@@ -107,10 +151,19 @@ export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
               capabilities: sapiom.capabilities,
             },
           ],
-          infrastructure: { postgres, serviceBus, azurite, tempo, prometheus, grafana },
+          infrastructure: {
+            postgres,
+            serviceBus,
+            ...(cloud ? { blob: azurite } : { azurite }),
+            tempo,
+            prometheus,
+            grafana,
+          },
           workerConcurrency: config.concurrency,
           queueDepth: null,
-          queueDepthReason: 'Service Bus emulator SDK counter unavailable',
+          queueDepthReason: cloud
+            ? 'Queue administration access is deliberately not granted'
+            : 'Service Bus emulator SDK counter unavailable',
         }
       },
       ready: async () =>
@@ -127,6 +180,12 @@ export async function createLocalRuntime(service: 'api' | 'worker'): Promise<{
     await close()
     throw error
   }
+}
+export async function createLocalRuntime(
+  service: 'api' | 'worker',
+): ReturnType<typeof createRuntime> {
+  if (process.env.AFR_RUNTIME === 'azure') throw new Error('Local runtime cannot select Azure')
+  return createRuntime(service)
 }
 export function startDispatcher(
   dispatcher: OutboxDispatcher,

@@ -10,7 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts'
-import { request, type OverviewDto, type Page, type ExecutionDto } from '@/lib/api'
+import { request, publicDemo, type OverviewDto, type Page, type ExecutionDto } from '@/lib/api'
 import { fmtCost, fmtDuration, usd, project } from '@/lib/data'
 import { MetricCard } from '@/components/console/metric-card'
 import { ExecutionTable } from '@/components/console/execution-table'
@@ -44,7 +44,7 @@ function OverviewPage(): JSX.Element {
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Overview</h1>
           <p className="font-mono text-[11px] text-muted-foreground">
-            All persisted history · local-dev · updated live
+            All persisted history · {publicDemo ? 'public sandbox' : 'local-dev'} · updated live
           </p>
         </div>
         <Link to="/executions" className="font-mono text-xs text-primary">

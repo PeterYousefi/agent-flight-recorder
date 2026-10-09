@@ -6,7 +6,7 @@ Five slides, including the title. Aim for a relaxed pace of roughly 125–135 wo
 
 **Time: 0:00–0:25 · Picture: `images/slide-01-overview.png`**
 
-> My project is Agent Flight Recorder. It records what happens when an agent execution runs, fails, retries, or reaches a budget limit. The goal is to make that work easier to investigate. This is a working local demo: the interface reads real stored execution data, while the provider responses and displayed costs are simulated.
+> My project is Agent Flight Recorder. It records what happens when an agent execution runs, fails, retries, or reaches a budget limit. The goal is to make that work easier to investigate. This is a working web demo hosted on Azure: the interface reads real stored execution data, while the provider responses and displayed costs are simulated.
 
 ## Slide 2 — How an execution works
 
@@ -30,11 +30,11 @@ Five slides, including the title. Aim for a relaxed pace of roughly 125–135 wo
 
 **Time: 2:30–3:00 · Picture: `images/slide-05-demo-lab.png`**
 
-> The repository includes setup instructions and automated tests. Demo Lab provides repeatable scenarios without a paid AI key. A useful starting point is transient failure: inspect the retry, open the timeline, and then try a simulation replay. Public Azure hosting is planned; the repository and local demo are available now. My focus was reliable execution and useful evidence when something fails.
+> The repository includes setup instructions and automated tests. Demo Lab provides repeatable scenarios without a paid AI key. A useful starting point is transient failure: inspect the retry, open the timeline, and then try a simulation replay. Open the Azure website to try it immediately, or download the repository to run it locally. My focus was reliable execution and useful evidence when something fails.
 
 ## Recording
 
-Paste each paragraph into its slide's speaker notes. Read the first sentence, pause briefly, then explain the image. On slide 3, point to red → amber → green. On slide 4, point to the recorded retry and the replay controls. On slide 5, pause at the repository link.
+Paste each paragraph into its slide's speaker notes. Read the first sentence, pause briefly, then explain the image. On slide 3, point to red → amber → green. On slide 4, point to the recorded retry and the replay controls. On slide 5, pause at the live Azure link and repository link.
 
 Use Gamma's presenter view for private notes and its presentation timer. For a narrated video, record the presentation with your microphone using a screen recorder, keeping the notes outside the captured presentation window. Notes alone do not create a voiceover. Do not record terminal windows, account details or credentials.
 

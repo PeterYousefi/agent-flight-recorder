@@ -6,6 +6,60 @@ export interface LocalConfig {
   readonly concurrency: number
   readonly telemetryEndpoint: string
 }
+export interface AzureConfig {
+  readonly mode: 'azure'
+  readonly databaseUrl: string
+  readonly serviceBusNamespace: string
+  readonly blobEndpoint: string
+  readonly identityClientId: string
+  readonly apiPort: number
+  readonly concurrency: number
+  readonly telemetryEndpoint: string
+}
+export function readAzureConfig(env: NodeJS.ProcessEnv = process.env): AzureConfig {
+  if (env.AFR_RUNTIME !== 'azure' || env.AFR_PUBLIC_DEMO !== 'true')
+    throw new Error('Azure runtime requires explicit public mock demo configuration')
+  if (env.SAPIOM_ENABLED !== 'false' || env.SAPIOM_API_KEY)
+    throw new Error('Azure public demo requires paid providers disabled and no credentials')
+  const database = new URL(env.DATABASE_URL ?? '')
+  if (
+    !['postgresql:', 'postgres:'].includes(database.protocol) ||
+    !/^[a-z0-9-]+\.postgres\.database\.azure\.com$/.test(database.hostname) ||
+    database.searchParams.get('sslmode') !== 'require' ||
+    database.searchParams.get('sslaccept') !== 'strict'
+  )
+    throw new Error('Azure PostgreSQL requires its Azure endpoint and TLS')
+  const namespace = env.AZURE_SERVICE_BUS_NAMESPACE ?? ''
+  const endpoint = new URL(env.AZURE_BLOB_ENDPOINT ?? '')
+  if (!/^[a-z0-9-]+\.servicebus\.windows\.net$/.test(namespace))
+    throw new Error('Invalid Azure Service Bus namespace')
+  if (
+    endpoint.protocol !== 'https:' ||
+    !/^[a-z0-9]+\.blob\.core\.windows\.net$/.test(endpoint.hostname) ||
+    endpoint.pathname !== '/' ||
+    endpoint.search ||
+    endpoint.username ||
+    endpoint.password
+  )
+    throw new Error('Invalid private Azure Blob endpoint')
+  if (!/^[a-f0-9-]{36}$/i.test(env.AZURE_CLIENT_ID ?? ''))
+    throw new Error('Azure runtime requires a user-assigned managed identity')
+  const integer = (name: string, fallback: number, max: number): number => {
+    const value = env[name] === undefined ? fallback : Number(env[name])
+    if (!Number.isInteger(value) || value < 1 || value > max) throw new Error(`Invalid ${name}`)
+    return value
+  }
+  return {
+    mode: 'azure',
+    databaseUrl: database.toString(),
+    serviceBusNamespace: namespace,
+    blobEndpoint: endpoint.toString(),
+    identityClientId: env.AZURE_CLIENT_ID!,
+    apiPort: integer(env.PORT === undefined ? 'API_PORT' : 'PORT', 3000, 65535),
+    concurrency: integer('WORKER_CONCURRENCY', 2, 5),
+    telemetryEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://localhost:4318',
+  }
+}
 export function readConfig(env: NodeJS.ProcessEnv = process.env): LocalConfig {
   const databaseUrl =
     env.DATABASE_URL ?? 'postgresql://afr_user:afr_password@localhost:5434/agent_flight_recorder'

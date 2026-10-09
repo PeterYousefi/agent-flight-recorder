@@ -8,9 +8,15 @@
 
 An asynchronous agent invocation can fail after being queued, consume money before timing out, or execute again after a worker crashes. AFR records the decisions and results needed to investigate that work: durable state, ordered events, attempts, cost records, private artifacts and a trace across the queue boundary.
 
-This is a working local control plane with a deterministic demo provider and an optional, narrowly scoped Sapiom Router adapter. The console reads real PostgreSQL projections. Synthetic demo costs are labelled; unavailable external prices and queue depth remain unavailable.
+This is a working control plane with a hosted Azure demo, local development, a deterministic demo provider and an optional, narrowly scoped Sapiom Router adapter. The console reads real PostgreSQL projections. Synthetic demo costs are labelled; unavailable external prices and queue depth remain unavailable.
 
-## Run the complete demo
+## Try it online
+
+Open [the Azure demo](https://agent-recorder-demo.canadacentral.cloudapp.azure.com) in your browser—no installation or paid AI key is needed. Start with **Demo Lab → Transient Failure**, inspect the timeline and graph, then try **Replay**.
+
+The hosted demo runs on Azure in Canada Central and uses real PostgreSQL, Service Bus and private Blob Storage. Provider output and application cost figures are simulated. It is a shared demo: visitors can inspect and control one another's synthetic executions. [Hosting, costs and deletion instructions](docs/vm-azure-demo.md).
+
+## Run the complete demo locally
 
 For a short project walkthrough, use the [three-minute Gamma presentation pack](docs/presentation/README.md): a five-slide prompt, per-slide narration and downloadable application screenshots.
 
@@ -29,11 +35,13 @@ Open [the console](http://localhost:5173), select **Demo Lab → Transient Failu
 
 API: [localhost:3000/api/docs](http://localhost:3000/api/docs). Grafana: [localhost:3001](http://localhost:3001), local-only `admin` / `admin`. Prometheus: [localhost:9090](http://localhost:9090). The application API and all container ports bind to loopback.
 
-**Actual Azure resources deployed: none**
+**Optional hosted demo: Azure VM, PostgreSQL, Service Bus and private Blob Storage. Local startup creates no Azure resources.**
 
 **Azure cost for local development/demo: $0**
 
 ## Architecture
+
+The diagram shows local development with emulators. The hosted demo uses Azure Service Bus and Blob Storage, managed PostgreSQL, and one VM for the API, embedded logical worker and observability stack.
 
 ```mermaid
 flowchart LR
@@ -109,9 +117,9 @@ pnpm benchmark
 
 The [ADRs](docs/adr) explain TypeScript, event-driven execution, infrastructure ports, PostgreSQL, local Azure emulation, OpenTelemetry and replay. [Reliability](docs/reliability.md) distinguishes durable local idempotency from repeated external effects, explains lease recovery and discusses private-blob orphan cleanup.
 
-This release is for local operation. It has no multi-user authentication or tenant isolation and must not be exposed publicly. Queue depth is unavailable through the emulator's SDK management surface. Settings report dependency health rather than proving worker liveness. Dollar limits cannot preflight unknown-priced Sapiom calls or guarantee a remote billing cap. Grafana/Tempo have finite local retention. The dashboard polls and bounds event loading at 5,000 facts. Cloud deployment requires additional runtime adapters/configuration, managed identity roles, PostgreSQL, network/auth hardening, packaging and resource budgets; the Bicep reference is intentionally undeployed.
+The default local runtime must remain on localhost. The separate public mode exposes only a shared synthetic demo, with paid providers disabled, bounded creation, rate limits, exact Host/Origin checks and HTTPS. It has no multi-user authentication or tenant isolation; use it for demonstrations, not private or production workloads. Queue depth is unavailable through the emulator's SDK management surface. Settings report dependency health rather than proving worker liveness. Dollar limits cannot preflight unknown-priced Sapiom calls or guarantee a remote billing cap. Grafana/Tempo have finite local retention. The dashboard polls and bounds event loading at 5,000 facts. The optional Azure deployment includes cloud runtime wiring, managed identity roles, PostgreSQL, private artifacts, native VM packaging and a monthly project budget alert. Budget alerts do not enforce a spending cap. Authenticated production deployment still requires additional work.
 
-Next improvements: authenticated tenant-scoped APIs and artifacts; a provider deduplication/usage-pricing contract plus crash/orphan reconciliation; deployable cloud runtime packaging with verified managed identity and production load/fault testing.
+Next improvements: authenticated tenant-scoped APIs and artifacts; a provider deduplication/usage-pricing contract plus crash/orphan reconciliation; production load/fault testing and authenticated cloud operation.
 
 ## Documentation
 
@@ -119,5 +127,6 @@ Next improvements: authenticated tenant-scoped APIs and artifacts; a provider de
 - [Reliability](docs/reliability.md), [retries](docs/retries.md), [replay](docs/replay.md), [dead letters](docs/dead-letters.md)
 - [Budgets](docs/budgets.md), [artifacts](docs/artifacts.md), [Sapiom](docs/integrations/sapiom.md)
 - [Observability](docs/observability.md), [operations](docs/operations.md), [Demo Lab](docs/demo.md)
+- [Hosted Azure demo, costs and deletion](docs/vm-azure-demo.md)
 - [Local development](docs/local-development.md), [security](docs/security.md), [Azure architecture and opt-in policy](docs/azure-deployment.md)
 - [Benchmarks](docs/benchmarks.md), [acceptance evidence](docs/acceptance.md)

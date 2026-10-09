@@ -3,7 +3,15 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ban, Copy, ExternalLink, GitBranch, ListTree, RefreshCw, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
-import { detail, request, terminal, type ExecutionDto, type ArtifactDto } from '@/lib/api'
+import {
+  detail,
+  request,
+  terminal,
+  grafanaUrl,
+  publicDemo,
+  type ExecutionDto,
+  type ArtifactDto,
+} from '@/lib/api'
 import { ExecutionStatusBadge } from '@/components/console/status-badge'
 import { JSONViewer } from '@/components/console/json-viewer'
 import { FlightRecorder } from '@/components/console/flight-recorder'
@@ -120,9 +128,10 @@ function DetailPage(): JSX.Element {
     data.execution.status,
   )
   const canRetry = ['FAILED', 'DEAD_LETTERED', 'BUDGET_EXCEEDED'].includes(data.execution.status)
-  const traceUrl = trace
-    ? `http://localhost:3001/explore?left=${encodeURIComponent(JSON.stringify({ datasource: 'tempo', queries: [{ refId: 'A', queryType: 'traceId', query: trace }], range: { from: 'now-1h', to: 'now' } }))}`
-    : null
+  const traceUrl =
+    trace && grafanaUrl
+      ? `${grafanaUrl}/explore?left=${encodeURIComponent(JSON.stringify({ datasource: 'tempo', queries: [{ refId: 'A', queryType: 'traceId', query: trace }], range: { from: 'now-1h', to: 'now' } }))}`
+      : null
   return (
     <div className="space-y-5">
       <Link to="/executions" className="font-mono text-xs text-muted-foreground hover:text-primary">
@@ -365,8 +374,9 @@ function DetailPage(): JSX.Element {
                 </a>
               )}
               <p className="text-xs text-muted-foreground">
-                Best-effort telemetry; persistence remains authoritative. Tempo retention may expire
-                an older trace.
+                {publicDemo && !grafanaUrl
+                  ? 'Persisted trace IDs connect execution facts. A public span viewer is not configured for this sandbox.'
+                  : 'Best-effort telemetry; persistence remains authoritative. Tempo retention may expire an older trace.'}
               </p>
               <JSONViewer
                 data={data.events.map((event) => ({

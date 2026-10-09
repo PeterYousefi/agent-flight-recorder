@@ -1,5 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { ServiceBusClient, type ServiceBusReceiver } from '@azure/service-bus'
+import type { TokenCredential } from '@azure/core-auth'
 import {
   createMessageEnvelope,
   type JsonValue,
@@ -18,17 +19,27 @@ export class AzureServiceBus implements MessageBus {
   private readonly sender: ReturnType<ServiceBusClient['createSender']>
   private closed = false
   public constructor(
-    connectionString: string,
+    connectionString: string | { readonly namespace: string; readonly credential: TokenCredential },
     private readonly queueName = 'executions',
     private readonly retryDelayMs = 10000,
   ) {
-    if (!connectionString.includes('UseDevelopmentEmulator=true'))
+    if (
+      typeof connectionString === 'string' &&
+      !connectionString.includes('UseDevelopmentEmulator=true')
+    )
       throw new AdapterError('INVALID', 'This runtime requires the local Service Bus emulator')
+    if (
+      typeof connectionString !== 'string' &&
+      !/^[a-z0-9-]+\.servicebus\.windows\.net$/.test(connectionString.namespace)
+    )
+      throw new AdapterError('INVALID', 'Invalid Azure Service Bus namespace')
     if (!Number.isInteger(retryDelayMs) || retryDelayMs < 10 || retryDelayMs > 30000)
       throw new AdapterError('INVALID', 'Invalid transport retry delay')
-    this.client = new ServiceBusClient(connectionString, {
-      retryOptions: { maxRetries: 3, timeoutInMs: 10000 },
-    })
+    const options = { retryOptions: { maxRetries: 3, timeoutInMs: 10000 } }
+    this.client =
+      typeof connectionString === 'string'
+        ? new ServiceBusClient(connectionString, options)
+        : new ServiceBusClient(connectionString.namespace, connectionString.credential, options)
     this.sender = this.client.createSender(queueName)
   }
   public async publish<T extends JsonValue>(message: MessageEnvelope<T>): Promise<void> {

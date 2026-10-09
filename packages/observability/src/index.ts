@@ -1,5 +1,6 @@
 export {
   startTelemetry,
+  startCloudTelemetry,
   traced,
   traceContext,
   correlation,

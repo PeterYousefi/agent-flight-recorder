@@ -2,7 +2,7 @@ import type { JSX } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { ShieldCheck, Server, Cpu } from 'lucide-react'
-import { request, type Budget } from '@/lib/api'
+import { request, publicDemo, type Budget } from '@/lib/api'
 import { JSONViewer } from '@/components/console/json-viewer'
 import { ErrorState, Loading } from '@/components/states'
 import { cn } from '@/lib/utils'
@@ -70,7 +70,7 @@ function SettingsPage(): JSX.Element {
       <div className="panel space-y-4 p-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold">
           <Server className="size-4 text-primary" />
-          Local infrastructure
+          {publicDemo ? 'Hosted dependencies' : 'Local infrastructure'}
         </h2>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {Object.entries(query.data.infrastructure).map(([name, status]) => (
@@ -100,15 +100,16 @@ function SettingsPage(): JSX.Element {
         <div className="panel space-y-3 p-4">
           <h2 className="flex items-center gap-2 text-sm font-semibold">
             <ShieldCheck className="size-4 text-success" />
-            Azure deployment disabled
+            {publicDemo ? 'Public mock sandbox' : 'Azure deployment disabled'}
           </h2>
           <p className="text-xs text-muted-foreground">
-            Actual Azure resources deployed: none. Azure cost for local development/demo: $0.
-            PostgreSQL, messaging, storage and telemetry run locally.
+            {publicDemo
+              ? 'The complete demo is hosted on Azure. Visitors share synthetic mock executions; paid providers and arbitrary input submission are disabled. Hosting costs are separate from synthetic execution costs.'
+              : 'Actual Azure resources deployed: none. Azure cost for local development/demo: $0. PostgreSQL, messaging, storage and telemetry run locally.'}
           </p>
           <a
             className="font-mono text-xs text-primary"
-            href="http://localhost:3000/api/docs"
+            href={publicDemo ? '/api/docs' : 'http://localhost:3000/api/docs'}
             target="_blank"
             rel="noreferrer"
           >

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { setTimeout as delay } from 'node:timers/promises'
-const base = 'http://127.0.0.1:3000/api/v1'
+const base = process.env.AFR_VERIFY_API_BASE ?? 'http://127.0.0.1:3000/api/v1'
+const tempoBase = process.env.AFR_VERIFY_TEMPO_BASE ?? 'http://127.0.0.1:3200'
+const collectorBase = process.env.AFR_VERIFY_COLLECTOR_BASE ?? 'http://127.0.0.1:8889'
 async function api(path, method = 'GET', body) {
   const response = await fetch(base + path, {
     method,
@@ -78,29 +80,37 @@ assert.equal(
 const events = (await api(`/executions/${transient}/events?limit=100`)).items
 const traceId = events.find((e) => e.correlation?.trace_id)?.correlation.trace_id
 assert.match(traceId, /^[a-f0-9]{32}$/)
-let trace
-for (let n = 0; n < 60; n++) {
-  const response = await fetch(`http://127.0.0.1:3200/api/traces/${traceId}`, {
-    headers: { accept: 'application/json' },
-  })
-  if (response.ok) {
-    trace = await response.json()
-    break
-  }
-  await delay(500)
-}
-assert.ok(trace, 'Tempo trace not found')
-const spans = (trace.batches ?? trace.resourceSpans ?? []).flatMap((b) =>
-  (b.scopeSpans ?? b.instrumentationLibrarySpans ?? []).flatMap((s) => s.spans ?? []),
-)
-for (const name of [
+const requiredSpans = [
   'http.request',
   'queue.publish',
   'queue.consume',
   'worker.process',
   'provider.execute',
   'artifact.put',
-])
+]
+let trace
+let spans = []
+for (let n = 0; n < 60; n++) {
+  const response = await fetch(`${tempoBase}/api/traces/${traceId}`, {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  }).catch((error) => {
+    if (error.name !== 'TimeoutError' && error.name !== 'TypeError') throw error
+    process.stdout.write(`Waiting for Tempo: ${error.name}\n`)
+    return null
+  })
+  if (response?.ok) {
+    trace = await response.json()
+    spans = (trace.batches ?? trace.resourceSpans ?? []).flatMap((b) =>
+      (b.scopeSpans ?? b.instrumentationLibrarySpans ?? []).flatMap((s) => s.spans ?? []),
+    )
+    // API and worker batches flush independently; a partial trace is not ready yet.
+    if (requiredSpans.every((name) => spans.some((s) => s.name === name))) break
+  }
+  await delay(500)
+}
+assert.ok(trace, 'Tempo trace not found')
+for (const name of requiredSpans)
   assert.ok(
     spans.some((s) => s.name === name),
     `Missing span ${name}`,
@@ -116,7 +126,7 @@ const requiredMetrics = [
 let missingMetrics = [...requiredMetrics]
 // Metrics export independently of trace export; allow the 5-second reader to flush.
 for (let n = 0; n < 60; n++) {
-  const response = await fetch('http://127.0.0.1:8889/metrics', {
+  const response = await fetch(`${collectorBase}/metrics`, {
     signal: AbortSignal.timeout(3000),
   })
   assert.ok(response.ok, 'Collector metrics endpoint unavailable')
@@ -129,5 +139,5 @@ for (let n = 0; n < 60; n++) {
 }
 assert.deepEqual(missingMetrics, [], 'Required committed-result metrics were not exported')
 process.stdout.write(
-  `Verified real API → PostgreSQL → Service Bus → worker → private Azurite, retries, budgets, immutable replay/requeue, cancellation, Tempo and metrics.\nSignature execution: ${transient}\nTrace: ${traceId}\n`,
+  `Verified real API → PostgreSQL → Service Bus → worker → private artifacts, retries, budgets, immutable replay/requeue, cancellation, Tempo and metrics.\nSignature execution: ${transient}\nTrace: ${traceId}\n`,
 )

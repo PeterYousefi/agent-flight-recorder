@@ -1,4 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { mkdtemp, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { PrismaClient } from '@prisma/client'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { PostgresExecutionStore } from '@afr/persistence'
@@ -230,6 +233,92 @@ describe.skipIf(process.env.AFR_TEST_DATABASE_URL === undefined)(
       expect(spec.paths['/api/v1/executions'].post.requestBody).toBeTruthy()
       expect(JSON.stringify(spec)).not.toContain('afr_password')
       expect((await api.inject('/api/v1/executions?limit=1')).json().items).toHaveLength(1)
+    })
+    it('serves public deep links and restricts real mutations to bounded mock scenarios', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'afr-public-web-'))
+      await writeFile(join(root, 'index.html'), '<!doctype html><title>Public sandbox</title>')
+      const publicApi = await createApi(
+        {
+          store,
+          orchestrator,
+          artifacts,
+          replay: new ReplayService(store, registry, orchestrator),
+          deadLetters: new DeadLetterService(store, orchestrator),
+          ready: async () => true,
+        },
+        { publicDemo: true, publicOrigin: 'https://demo.example', staticWebRoot: root },
+      )
+      const create = orchestrator.create.bind(orchestrator)
+      orchestrator.create = (value) => create({ ...(value as object), agentId })
+      const headers = { host: 'demo.example', origin: 'https://demo.example' }
+      try {
+        const page = await publicApi.inject({
+          url: '/executions/any',
+          headers: { ...headers, accept: 'text/html' },
+        })
+        expect(page.statusCode).toBe(200)
+        expect(page.body).toContain('Public sandbox')
+        expect(page.headers['strict-transport-security']).toBeTruthy()
+        expect(
+          (
+            await publicApi.inject({
+              url: '/api/missing',
+              headers: { ...headers, accept: 'text/html' },
+            })
+          ).statusCode,
+        ).toBe(404)
+        expect(
+          (
+            await publicApi.inject({
+              method: 'POST',
+              url: '/api/v1/executions',
+              headers,
+              payload: body,
+            })
+          ).json().error.code,
+        ).toBe('PUBLIC_DEMO_ONLY')
+        expect(
+          (
+            await publicApi.inject({
+              method: 'POST',
+              url: '/api/v1/demo/scenarios/success/run',
+              headers: { ...headers, origin: 'https://attacker.example' },
+            })
+          ).statusCode,
+        ).toBe(403)
+        const first = await publicApi.inject({
+          method: 'POST',
+          url: '/api/v1/demo/scenarios/success/run',
+          headers,
+        })
+        expect(first.statusCode).toBe(202)
+        expect(first.json().provider).toBe('mock')
+        await dispatcher.dispatch()
+        await bus.drain()
+        expect(
+          (await publicApi.inject({ url: `/api/v1/executions/${first.json().id}`, headers })).json()
+            .status,
+        ).toBe('SUCCEEDED')
+        for (let index = 0; index < 10; index++)
+          await publicApi.inject({
+            method: 'POST',
+            url: '/api/v1/demo/scenarios/success/run',
+            headers,
+          })
+        expect(
+          (
+            await publicApi.inject({
+              method: 'POST',
+              url: '/api/v1/demo/scenarios/success/run',
+              headers,
+            })
+          ).statusCode,
+        ).toBe(429)
+      } finally {
+        orchestrator.create = create
+        await publicApi.close()
+        await rm(root, { recursive: true, force: true })
+      }
     })
   },
 )

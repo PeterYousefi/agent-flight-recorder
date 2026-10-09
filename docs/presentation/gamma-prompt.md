@@ -10,7 +10,7 @@ Use a 16:9 presentation format, a dark charcoal background, white text, and rest
 
 SLIDE 1 — Agent Flight Recorder
 Subtitle: Record, inspect and replay agent executions
-Short supporting line: A working local demo for investigating failures, retries and costs
+Short supporting line: A working Azure demo for investigating failures, retries and costs
 Image: slide-01-overview.png. Show only the upper overview and metric cards; crop away the empty/loading chart and table below. Treat the metric numbers as sample demo output, not headline achievements. Keep the project title dominant.
 
 SLIDE 2 — How an execution works
@@ -20,7 +20,7 @@ Show PostgreSQL connected to the API/outbox and worker, labelled “Execution st
 - Queue separates requests from execution
 - PostgreSQL preserves state and history
 - Traces connect work across services
-Small footer: “Local demo: Service Bus emulator + Azurite; default provider: MockProvider”. No screenshot is needed on this slide. Do not label the system as deployed on Azure.
+Small footer: “Azure demo: PostgreSQL + Service Bus + private Blob Storage; default provider: MockProvider”. No screenshot is needed on this slide.
 
 SLIDE 3 — Recovery after a failure
 Image: slide-03-execution-graph.png. Make the execution graph the dominant visual. Crop to the Graph panel, preserving both attempts and the red, amber and green nodes. Exclude the raw JSON panel below.
@@ -43,9 +43,10 @@ Image: slide-05-demo-lab.png. Show only the top of this mobile screenshot: Demo 
 Text:
 - Reproduce retries, timeouts and budget failures
 - Inspect the recorded history and try a replay
+- Live Azure demo: https://agent-recorder-demo.canadacentral.cloudapp.azure.com
 - Repository: github.com/PeterYousefi/agent-flight-recorder
 Closing line: “My focus: reliable execution and useful evidence when work fails.”
-Small status line: “Available now: repository and local demo · public Azure hosting planned”. Do not invent a live website, customer adoption, paid model usage, security certification, production readiness, benchmark or a guaranteed hosting cost.
+Small status line: “Available now: live Azure website and downloadable repository”. Do not invent a live website, customer adoption, paid model usage, security certification, production readiness, benchmark or a guaranteed hosting cost.
 
 Keep visible slide text concise. I will add the separate per-slide narration as speaker notes and record the voiceover myself. Do not place narration paragraphs on the slides.
 ```

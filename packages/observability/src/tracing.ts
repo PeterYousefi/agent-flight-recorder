@@ -12,8 +12,27 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http'
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http'
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics'
 import { resourceFromAttributes } from '@opentelemetry/resources'
+import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-base'
 
-export function startTelemetry(serviceName: string, endpoint = 'http://localhost:4318'): NodeSDK {
+/** Cloud sandbox uses manual spans and log streaming without paid ingestion. */
+export function startCloudTelemetry(serviceName: string): NodeSDK {
+  const sdk = new NodeSDK({
+    autoDetectResources: false,
+    resource: resourceFromAttributes({
+      'service.name': serviceName,
+      'deployment.environment.name': 'azure-demo',
+    }),
+    traceExporter: new ConsoleSpanExporter(),
+  })
+  sdk.start()
+  return sdk
+}
+
+export function startTelemetry(
+  serviceName: string,
+  endpoint = 'http://localhost:4318',
+  environment = 'local',
+): NodeSDK {
   const url = new URL(endpoint)
   if (
     !['localhost', '127.0.0.1', 'otel-collector'].includes(url.hostname) ||
@@ -24,7 +43,7 @@ export function startTelemetry(serviceName: string, endpoint = 'http://localhost
     autoDetectResources: false,
     resource: resourceFromAttributes({
       'service.name': serviceName,
-      'deployment.environment.name': 'local',
+      'deployment.environment.name': environment,
     }),
     traceExporter: new OTLPTraceExporter({ url: `${endpoint}/v1/traces`, timeoutMillis: 5000 }),
     metricReader: new PeriodicExportingMetricReader({
